@@ -1,0 +1,47 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: #EEE9DF;
+  color: #2C3B4D;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #E8E2D6; }
+::-webkit-scrollbar-thumb { background: #C9C1B1; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #B8B0A0; }
+
+input, button, select, textarea { font-family: inherit; }
+
+/* ── Mapbox popup theme override ─────────────────────────────────────────── */
+.mapboxgl-popup-content {
+  background: #16181d !important;
+  border: 1px solid rgba(255,255,255,0.1) !important;
+  border-radius: 10px !important;
+  padding: 0 !important;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5) !important;
+  font-family: 'Inter', system-ui, sans-serif !important;
+  min-width: 200px;
+}
+.mapboxgl-popup-tip {
+  border-top-color: #16181d !important;
+  border-bottom-color: #16181d !important;
+}
+.mapboxgl-popup-close-button {
+  color: rgba(255,255,255,0.4) !important;
+  font-size: 16px !important;
+  padding: 6px 10px !important;
+  line-height: 1 !important;
+  top: 2px !important;
+  right: 2px !important;
+}
+.mapboxgl-popup-close-button:hover {
+  color: rgba(255,255,255,0.8) !important;
+  background: transparent !important;
+}
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
