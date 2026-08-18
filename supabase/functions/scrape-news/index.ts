@@ -76,9 +76,9 @@ const REGION_KEYWORDS: Record<string, string[]> = {
   'Europe': ['europe', 'european', 'eu', 'brussels', 'entso-e'],
 }
 
-// Fuse-relevance keywords (higher weight for acquisition & development context)
-const FUSE_RELEVANCE_KEYWORDS = [
-  // Core Fuse activities
+// Grid CRM-relevance keywords (higher weight for acquisition & development context)
+const GRID_CRM_RELEVANCE_KEYWORDS = [
+  // Core Grid CRM activities
   'acquisition', 'development', 'ready to build', 'rtb', 'cod', 'commissioning',
   'solar', 'wind', 'bess', 'battery storage', 'gas peaker',
   // Geographies
@@ -115,7 +115,7 @@ function classify(text: string, keywordMap: Record<string, string[]>): string | 
 function scoreRelevance(text: string): number {
   const lower = text.toLowerCase()
   let score = 0
-  for (const kw of FUSE_RELEVANCE_KEYWORDS) {
+  for (const kw of GRID_CRM_RELEVANCE_KEYWORDS) {
     const regex = new RegExp(`\\b${kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi')
     const matches = lower.match(regex)
     if (matches) score += matches.length
@@ -239,7 +239,7 @@ async function fetchFromSource(sourceKey: string): Promise<RawArticle[]> {
   try {
     const response = await fetch(config.rssUrl, {
       headers: {
-        'User-Agent': 'FuseEnergy-NewsBot/1.0',
+        'User-Agent': 'GridCRM-NewsBot/1.0',
         'Accept': 'application/rss+xml, application/xml, text/xml, application/atom+xml',
       },
     })

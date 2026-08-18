@@ -1,6 +1,6 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // generateProposalHTML.js
-// Produces a self-contained Fuse private wire proposal HTML document.
+// Produces a self-contained Grid CRM private wire proposal HTML document.
 // ─────────────────────────────────────────────────────────────────────────────
 
 // UK solar irradiance monthly distribution (fraction of annual generation)
@@ -62,7 +62,6 @@ const CSS = `
   .topnav{position:fixed;top:0;left:0;right:0;z-index:50;display:flex;align-items:center;justify-content:space-between;padding:18px 40px;backdrop-filter:blur(14px);background:rgba(246,244,240,0.72);border-bottom:1px solid transparent;transition:background .25s ease,border-color .25s ease;}
   .topnav.scrolled{background:rgba(246,244,240,0.92);border-bottom-color:var(--line);}
   .topnav .brand{display:flex;align-items:center;gap:12px;font-family:var(--display);font-weight:800;letter-spacing:-0.3px;font-size:18px;white-space:nowrap;flex-shrink:0;}
-  .fuse-mark{width:28px;height:28px;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;}
   .topnav .brand .x{color:var(--muted);font-weight:500;font-size:15px;margin:0 2px;}
   .topnav .meta{font-family:var(--mono);font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);white-space:nowrap;flex-shrink:0;}
   @media(max-width:1280px){.topnav .meta{display:none;}}
@@ -344,13 +343,15 @@ export function generateProposalHTML(data) {
 
   const planningNote = planningAuth ? `Planning authority: ${planningAuth}.` : '';
   const wireNote = wireDistance ? `Private wire distance: approximately ${wireDistance}.` : '';
+  const contactHref = preparerEmail ? `mailto:${preparerEmail}` : '#downloads';
+  const contactLabel = preparerEmail || 'Contact details available on request';
 
   return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Fuse × ${orgName} · Near-Site Solar Proposal</title>
+<title>Grid CRM × ${orgName} · Near-Site Solar Proposal</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Figtree:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -362,7 +363,7 @@ export function generateProposalHTML(data) {
 
 <header class="topnav" id="topnav">
   <div class="brand">
-    Fuse <span class="x">×</span>
+    Grid CRM <span class="x">×</span>
     <span style="font-weight:500;font-size:15px;color:var(--muted);">${orgName}</span>
   </div>
   <nav id="navlinks">
@@ -372,7 +373,7 @@ export function generateProposalHTML(data) {
     <a href="#ppa">PPA</a>
     <a href="#timeline">Timeline</a>
     <a href="#site">Site</a>
-    <a href="#fuse">Fuse</a>
+    <a href="#gridcrm">Grid CRM</a>
     <a href="#faq">FAQ</a>
     <a href="#next">Next</a>
   </nav>
@@ -385,7 +386,7 @@ export function generateProposalHTML(data) {
   <div class="hero-inner">
     <div class="kicker">
       <span class="tag">Private proposal</span>
-      <span>Fuse Renewables Ltd · ${proposalMonthYear}</span>
+      <span>Grid CRM · ${proposalMonthYear}</span>
       <span style="padding-left:14px;border-left:1px solid rgba(255,255,255,0.18);margin-left:4px;color:rgba(255,255,255,0.75);">Prepared for ${orgName}</span>
     </div>
     <h1>Ten years of <span class="orange">fixed-price</span> solar. Built next door.</h1>
@@ -428,12 +429,12 @@ export function generateProposalHTML(data) {
       <div class="pillar">
         <div class="tag">02 · Commercial</div>
         <h3>Fixed tariff. Zero capex.</h3>
-        <p>Fuse develops, builds, owns and operates the farm under a ${ppaTerm}-year Power Purchase Agreement. ${orgName} pays a fixed £/MWh rate, CPI-indexed. No construction spend, no O&amp;M liability.</p>
+        <p>Grid CRM develops, builds, owns and operates the farm under a ${ppaTerm}-year Power Purchase Agreement. ${orgName} pays a fixed £/MWh rate, CPI-indexed. No construction spend, no O&amp;M liability.</p>
       </div>
       <div class="pillar">
         <div class="tag">03 · Renewable</div>
         <h3>REGOs transferred monthly.</h3>
-        <p>Every megawatt-hour generated earns a Renewable Energy Guarantee of Origin. Ofgem issues and Fuse transfers them monthly, giving ${orgName} certificated, auditable decarbonisation of site consumption.</p>
+        <p>Every megawatt-hour generated earns a Renewable Energy Guarantee of Origin. Ofgem issues and Grid CRM transfers them monthly, giving ${orgName} certificated, auditable decarbonisation of site consumption.</p>
       </div>
     </div>
   </div>
@@ -445,7 +446,7 @@ export function generateProposalHTML(data) {
     <div class="sec-head reveal">
       <div class="num">02. Scenarios</div>
       <h2>Two sizing options.</h2>
-      <p class="lede">We have modelled two scenarios using ${orgName}'s annual consumption of ${demandFmt} MWh. Both assume a ${ppaTerm}-year PPA with Fuse.</p>
+      <p class="lede">We have modelled two scenarios using ${orgName}'s annual consumption of ${demandFmt} MWh. Both assume a ${ppaTerm}-year PPA with Grid CRM.</p>
     </div>
     <div class="toggle-wrap reveal">
       <div class="toggle" id="scenario-toggle">
@@ -506,7 +507,7 @@ export function generateProposalHTML(data) {
     <div class="sec-head reveal">
       <div class="num">04. Commercial</div>
       <h2>How the PPA works.</h2>
-      <p class="lede">The structure applies to both scenarios: certainty and simplicity for ${orgName}, and the long-term offtake commitment Fuse needs to finance the build at a competitive rate.</p>
+      <p class="lede">The structure applies to both scenarios: certainty and simplicity for ${orgName}, and the long-term offtake commitment Grid CRM needs to finance the build at a competitive rate.</p>
     </div>
     <div class="ppa-grid reveal">
       <div class="ppa-card dark">
@@ -532,7 +533,7 @@ export function generateProposalHTML(data) {
         <h3>Operations</h3>
         <hr>
         <ul>
-          <li>Fuse handles O&amp;M, insurance and performance guarantees</li>
+          <li>Grid CRM handles O&amp;M, insurance and performance guarantees</li>
           <li>Zero capital expenditure through construction and operation</li>
         </ul>
       </div>
@@ -626,16 +627,16 @@ export function generateProposalHTML(data) {
   </div>
 </section>
 
-<!-- 07 ABOUT FUSE -->
-<section class="sec" id="fuse">
+<!-- 07 ABOUT GRID CRM -->
+<section class="sec" id="gridcrm">
   <div class="container">
     <div class="sec-head reveal">
-      <div class="num">07. About Fuse</div>
+      <div class="num">07. About Grid CRM</div>
       <h2>Renewable energy,<br>delivered end-to-end.</h2>
     </div>
     <div class="about reveal">
       <div>
-        <p class="lede">Fuse is a full-stack energy company. We supply power to businesses and homes, and we develop and build solar farms too, exporting to the grid or supplying offtakers directly via private wire. EPC and O&amp;M are both in-house, so there are no third-party handoffs. Fuse originates the site, secures planning, finances construction, and then owns and operates the asset for the full life of the project. Our clients only ever see a clean MWh and a fixed invoice.</p>
+        <p class="lede">Grid CRM is a full-stack energy company. We supply power to businesses and homes, and we develop and build solar farms too, exporting to the grid or supplying offtakers directly via private wire. EPC and O&amp;M are both in-house, so there are no third-party handoffs. Grid CRM originates the site, secures planning, finances construction, and then owns and operates the asset for the full life of the project. Our clients only ever see a clean MWh and a fixed invoice.</p>
       </div>
       <div class="credentials">
         <div class="cred"><div class="n">450<span style="font-size:0.4em;color:var(--muted);margin-left:6px;font-family:var(--mono);">MW+</span></div><div class="l">Global development pipeline &amp; counting</div></div>
@@ -655,11 +656,11 @@ export function generateProposalHTML(data) {
       <h2>Common questions.</h2>
     </div>
     <div class="faq-list reveal">
-      <details class="faq"><summary><h3>What happens if Fuse goes out of business?</h3><span class="plus">+</span></summary>
-        <div class="a">The solar farm is held in a ring-fenced SPV, separate from Fuse's wider trading activity. If Fuse were to fail, the asset itself, the land rights, and the DNO connection remain intact and under the SPV, so the physical generation capacity is protected. The PPA is drafted with continuity provisions so that ${orgName}'s supply is not dependent on Fuse's corporate solvency: in practice this means the SPV can be transferred to an alternative owner or operator, with ${orgName}'s contract novated across.</div>
+      <details class="faq"><summary><h3>What happens if Grid CRM goes out of business?</h3><span class="plus">+</span></summary>
+        <div class="a">The solar farm is held in a ring-fenced SPV, separate from Grid CRM's wider trading activity. If Grid CRM were to fail, the asset itself, the land rights, and the DNO connection remain intact and under the SPV, so the physical generation capacity is protected. The PPA is drafted with continuity provisions so that ${orgName}'s supply is not dependent on Grid CRM's corporate solvency: in practice this means the SPV can be transferred to an alternative owner or operator, with ${orgName}'s contract novated across.</div>
       </details>
       <details class="faq"><summary><h3>Is planning a material risk to the timeline?</h3><span class="plus">+</span></summary>
-        <div class="a">A solar farm at this scale (under 5 MW) is within typical local planning authority powers${planningAuth ? ' — in this case ' + planningAuth : ''} rather than requiring a DCO. Fuse manages pre-application engagement, EIA screening and submission. Our indicative timeline assumes standard determination; material delay would shift COD by one quarter.</div>
+        <div class="a">A solar farm at this scale (under 5 MW) is within typical local planning authority powers${planningAuth ? ' — in this case ' + planningAuth : ''} rather than requiring a DCO. Grid CRM manages pre-application engagement, EIA screening and submission. Our indicative timeline assumes standard determination; material delay would shift COD by one quarter.</div>
       </details>
       <details class="faq"><summary><h3>What if site demand changes materially?</h3><span class="plus">+</span></summary>
         <div class="a">The Take-or-Pay volume is set conservatively against today's consumption of ${demandFmt} MWh/yr. If demand grows, additional volume can be absorbed at the same rate up to the generation cap. If it falls, the minimum volume remains, protecting the finance stack while still delivering the vast majority of consumed energy renewably.</div>
@@ -687,7 +688,7 @@ export function generateProposalHTML(data) {
         <h2>Shall we build it?</h2>
         <p>Four decisions stand between this proposal and a signed PPA. We're ready to move as soon as ${orgName} is.</p>
         <div class="cta-row">
-          <a class="btn primary" href="mailto:${preparerEmail || 'hello@fuseenergy.com'}">Get in touch →</a>
+          <a class="btn primary" href="${contactHref}">Get in touch →</a>
         </div>
       </div>
       <div class="steps">
@@ -714,10 +715,10 @@ export function generateProposalHTML(data) {
         <h3>Full proposal</h3>
         <p>Save as PDF using your browser's print function.</p>
       </a>
-      <a class="dl" href="mailto:${preparerEmail || 'hello@fuseenergy.com'}">
+      <a class="dl" href="${contactHref}">
         <div class="type"><span>Email · On request</span><span class="arrow">↗</span></div>
         <h3>Draft PPA template</h3>
-        <p>Contact your Fuse account manager for a draft PPA redline.</p>
+        <p>Contact your Grid CRM account manager for a draft PPA redline.</p>
       </a>
     </div>
   </div>
@@ -725,9 +726,9 @@ export function generateProposalHTML(data) {
 
 <footer>
   <div class="container" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px;">
-    <div class="brand"><span class="dot"></span> Fuse Renewables Ltd</div>
+    <div class="brand"><span class="dot"></span> Grid CRM</div>
     <div>Confidential · For ${orgName} only · Prepared ${proposalDate}</div>
-    <div>${preparerEmail || 'hello@fuseenergy.com'}</div>
+    <div>${contactLabel}</div>
   </div>
 </footer>
 

@@ -130,10 +130,10 @@ export const STAGES = [
           { id: "send_legal_docs", type: "check", label: "Send Legal doc request list" },
         ],
       },
-      { id: "get_vdr", type: "check", label: "Get on VDR (full data room — FUSE)" },
-      { id: "draft_spa", type: "check", label: "Fuse to provide our draft SPA agreement" },
+      { id: "get_vdr", type: "check", label: "Get on VDR (full data room — Grid CRM)" },
+      { id: "draft_spa", type: "check", label: "Grid CRM to provide our draft SPA agreement" },
       {
-        id: "fuse_dd", type: "group", label: "Fuse internal DD (DD Checklist) — 1–2 days:",
+        id: "gridcrm_dd", type: "group", label: "Grid CRM internal DD (DD Checklist) — 1–2 days:",
         children: [
           { id: "produce_layout", type: "check", label: "Produce Layout (1 day) — EPC" },
           { id: "produce_yield", type: "check", label: "Produce Yield Report (1 day) — EPC" },

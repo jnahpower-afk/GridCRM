@@ -178,7 +178,7 @@ function NewsStats({ articles, theme }) {
       {[
         { label: 'Today', value: `${todayCount} articles`, sub: 'Published today' },
         { label: 'Sources', value: `${sources.length} active`, sub: sources.map(s => SOURCE_LABELS[s] || s).join(', ') },
-        { label: 'High Relevance', value: `${highRelevance}`, sub: 'Scored 8+ for Fuse', color: '#4A8C5C' },
+        { label: 'High Relevance', value: `${highRelevance}`, sub: 'Scored 8+ for Grid CRM', color: '#4A8C5C' },
         { label: 'Total Articles', value: `${articles.length}`, sub: 'In current view' },
       ].map(stat => (
         <div key={stat.label} style={{

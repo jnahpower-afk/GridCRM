@@ -76,7 +76,7 @@ async function generateMemo(project, data) {
   let y = margin
 
   // Colours
-  const fuseOrange = '#FC6A0A'
+  const gridcrmOrange = '#FC6A0A'
   const darkText = '#1B2632'
   const mutedText = '#5A6E82'
   const lightGrey = '#EEE9DF'
@@ -88,11 +88,11 @@ async function generateMemo(project, data) {
   const heading = (text, size = 14) => {
     checkPage(20)
     doc.setFontSize(size)
-    doc.setTextColor(fuseOrange)
+    doc.setTextColor(gridcrmOrange)
     doc.setFont('helvetica', 'bold')
     doc.text(text, margin, y)
     y += size * 0.5
-    doc.setDrawColor(fuseOrange)
+    doc.setDrawColor(gridcrmOrange)
     doc.setLineWidth(0.5)
     doc.line(margin, y, margin + contentW, y)
     y += 6
@@ -158,7 +158,7 @@ async function generateMemo(project, data) {
   doc.setFontSize(10)
   doc.setTextColor(255, 255, 255)
   doc.setFont('helvetica', 'normal')
-  doc.text('FUSE ENERGY', margin, 15)
+  doc.text('GRID CRM', margin, 15)
 
   doc.setFontSize(22)
   doc.setFont('helvetica', 'bold')
@@ -363,7 +363,7 @@ async function generateMemo(project, data) {
     doc.setPage(i)
     doc.setFontSize(7)
     doc.setTextColor(180, 180, 180)
-    doc.text(`Fuse Energy | IC Memo | ${project.name} | CONFIDENTIAL`, margin, 290)
+    doc.text(`Grid CRM | IC Memo | ${project.name} | CONFIDENTIAL`, margin, 290)
     doc.text(`Page ${i} of ${pageCount}`, W - margin - 20, 290)
   }
 

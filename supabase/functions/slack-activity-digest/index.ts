@@ -153,7 +153,7 @@ serve(async (_req) => {
     const blocks: object[] = [
       {
         type: "header",
-        text: { type: "plain_text", text: "📊 Fuse CRM — End of Day", emoji: true },
+        text: { type: "plain_text", text: "📊 Grid CRM — End of Day", emoji: true },
       },
       {
         type: "context",
@@ -231,7 +231,7 @@ serve(async (_req) => {
       elements: [{
         type: "button",
         text:  { type: "plain_text", text: "Open CRM →", emoji: true },
-        url:   "https://fuse-platform.vercel.app",
+        url:   "https://gridcrm-two.vercel.app",
         style: "primary",
       }],
     });

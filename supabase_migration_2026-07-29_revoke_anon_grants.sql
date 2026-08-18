@@ -1,4 +1,4 @@
--- URGENT: close unauthenticated (anon) access to the Fuse CRM database.
+-- URGENT: close unauthenticated (anon) access to the Grid CRM database.
 -- Verified 2026-07-28 against project puzfqevdphncajcjkvha.
 --
 -- WHAT IS WRONG

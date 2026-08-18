@@ -2,7 +2,7 @@
 // Sends an HTML email on behalf of a team member via their connected Gmail account.
 // - Converts plain-text body to HTML
 // - Replaces the calendar link URL with a styled "Book a meeting" anchor
-// - Appends a branded Fuse Energy signature with logo
+// - Appends a Grid CRM signature
 //
 // POST body (JSON):
 //   owner_name    string  — team member name, e.g. "Laurie Campbell"
@@ -19,7 +19,6 @@ const CLIENT_SECRET = Deno.env.get("GMAIL_CLIENT_SECRET")!;
 const SUPABASE_URL  = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY   = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-const LOGO_URL      = "https://fuse-platform.vercel.app/favicon.svg";
 const BRAND_COLOR   = "#F8632C";
 
 const corsHeaders = {
@@ -71,15 +70,11 @@ function buildHtml(body: string, calendarLink: string | undefined, ownerName: st
 <div style="border-top:1px solid #e5e7eb;margin-top:20px;padding-top:16px;max-width:500px">
   <table cellpadding="0" cellspacing="0" border="0">
     <tr>
-      <td style="padding-right:12px;vertical-align:middle">
-        <img src="${LOGO_URL}" width="40" height="40" alt="Fuse Energy"
-          style="display:block;border-radius:8px;border:0">
-      </td>
       <td style="vertical-align:middle">
         <div style="font-family:Arial,sans-serif;font-size:13px;font-weight:700;color:#111111;margin-bottom:2px">${escapeHtml(ownerName)}</div>
-        <div style="font-family:Arial,sans-serif;font-size:12px;color:#555555;line-height:1.5">Fuse Energy</div>
+        <div style="font-family:Arial,sans-serif;font-size:12px;color:#555555;line-height:1.5">Grid CRM</div>
         <div style="font-family:Arial,sans-serif;font-size:12px;color:#555555;line-height:1.5">
-          <a href="https://fuseenergy.com" style="color:#555555;text-decoration:none;">fuseenergy.com</a>
+          <a href="https://gridcrm-two.vercel.app" style="color:#555555;text-decoration:none;">gridcrm-two.vercel.app</a>
         </div>
       </td>
     </tr>

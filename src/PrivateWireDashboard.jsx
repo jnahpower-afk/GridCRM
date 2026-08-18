@@ -522,7 +522,7 @@ function DashboardWidget({ id, title, color, editMode, onRemove, children, theme
 
 // ─── MAIN DASHBOARD COMPONENT ───────────────────────────────────────────────
 
-const STAGE_COLORS_FUSE = { New: "#6366F1", Contacted: "#2563EB", "Meeting Booked": "#FFB162", Proposal: "#FC6A0A", Negotiation: "#15803D", Won: "#4ADE80", Lost: "#EF4444" };
+const STAGE_COLORS_GRID_CRM = { New: "#6366F1", Contacted: "#2563EB", "Meeting Booked": "#FFB162", Proposal: "#FC6A0A", Negotiation: "#15803D", Won: "#4ADE80", Lost: "#EF4444" };
 const STAGE_COLORS_LINEAR = { New: "#818CF8", Contacted: "#60A5FA", "Meeting Booked": "#FBBF24", Proposal: "#FB923C", Negotiation: "#16A34A", Won: "#4ADE80", Lost: "#F87171" };
 const STAGES = ["New", "Contacted", "Meeting Booked", "Proposal", "Negotiation", "Won", "Lost"];
 const STAGE_LABELS = { New: "New Target" }; // display overrides
@@ -646,7 +646,7 @@ export default function PrivateWireDashboard({ leads: leadsRaw, theme, hideTeamS
     localStorage.setItem(REMOVED_KEY, JSON.stringify(DEFAULT_REMOVED));
   }
 
-  const stageColors = theme.name === "linear" ? STAGE_COLORS_LINEAR : STAGE_COLORS_FUSE;
+  const stageColors = theme.name === "linear" ? STAGE_COLORS_LINEAR : STAGE_COLORS_GRID_CRM;
 
     const _now = new Date();
   const todayDate = `${_now.getFullYear()}-${String(_now.getMonth()+1).padStart(2,"0")}-${String(_now.getDate()).padStart(2,"0")}`;
@@ -1387,6 +1387,6 @@ export default function PrivateWireDashboard({ leads: leadsRaw, theme, hideTeamS
 export {
   StackedBarChart, PipelineFunnel, PieChart, AreaChart, ChartBox,
   useContainerSize, CHANNEL_COLORS, SECTOR_COLORS, OWNER_PALETTE,
-  STAGE_COLORS_FUSE, STAGE_COLORS_LINEAR, STAGES, STAGE_LABELS,
+  STAGE_COLORS_GRID_CRM, STAGE_COLORS_LINEAR, STAGES, STAGE_LABELS,
   getDaysBetween, formatDate, formatDateShort, formatDaysInStage, getDurationColor,
 };

@@ -52,7 +52,7 @@ export default function Sidebar({ section, subView, onNavigate, session, taskBad
       }}>
         {!collapsed && (
           <span style={{ flex: 1, overflow: 'hidden', fontSize: 15, fontWeight: 800, color: theme.textPrimary, letterSpacing: '-0.01em', whiteSpace: 'nowrap' }}>
-            Fuse Energy
+            Grid CRM
           </span>
         )}
 
@@ -185,8 +185,8 @@ export default function Sidebar({ section, subView, onNavigate, session, taskBad
         )}
         <div style={{ display: 'flex', gap: 6, justifyContent: collapsed ? 'center' : 'flex-start', flexDirection: collapsed ? 'column' : 'row' }}>
           <button
-            onClick={() => setThemeName(themeName === 'fuse' ? 'linear' : 'fuse')}
-            title={themeName === 'fuse' ? 'Switch to light theme' : 'Switch to dark theme'}
+            onClick={() => setThemeName(themeName === 'gridcrm' ? 'linear' : 'gridcrm')}
+            title={themeName === 'gridcrm' ? 'Switch to light theme' : 'Switch to dark theme'}
             style={{
               flex: collapsed ? 'none' : 1,
               width: collapsed ? 32 : 'auto',
@@ -203,7 +203,7 @@ export default function Sidebar({ section, subView, onNavigate, session, taskBad
               justifyContent: 'center',
             }}
           >
-            {themeName === 'fuse' ? (collapsed ? '◐' : '◐ Light') : (collapsed ? '◑' : '◑ Dark')}
+            {themeName === 'gridcrm' ? (collapsed ? '◐' : '◐ Light') : (collapsed ? '◑' : '◑ Dark')}
           </button>
           <button
             onClick={() => onNavigate('settings')}

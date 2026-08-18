@@ -887,7 +887,7 @@ export default function GreenfieldProjects({
                         padding: "1px 6px", borderRadius: 4,
                       }}>{label}</span>
                       {a.source === "gmail" && (
-                        <span title={a.direction === "outbound" ? "Sent from Fuse" : "Received"} style={{
+                        <span title={a.direction === "outbound" ? "Sent from Grid CRM" : "Received"} style={{
                           fontSize: 9, fontWeight: 700, color: ACCENT, background: ACCENT + "1a",
                           border: `1px solid ${ACCENT}33`, padding: "1px 6px", borderRadius: 4,
                         }}>{a.direction === "outbound" ? "Gmail ↗" : a.direction === "inbound" ? "Gmail ↙" : "Gmail"}</span>

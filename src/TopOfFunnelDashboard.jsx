@@ -8,7 +8,7 @@ import "react-resizable/css/styles.css";
 import {
   StackedBarChart, PipelineFunnel, ChartBox,
   CHANNEL_COLORS, SECTOR_COLORS, OWNER_PALETTE,
-  STAGE_COLORS_FUSE, STAGES, STAGE_LABELS,
+  STAGE_COLORS_GRID_CRM, STAGES, STAGE_LABELS,
   getDaysBetween, formatDaysInStage, getDurationColor,
 } from "./PrivateWireDashboard.jsx";
 import { GridAppBatteryChart } from "./GreenfieldProjects.jsx";
@@ -604,7 +604,7 @@ export default function TopOfFunnelDashboard() {
   };
 
   // ── Styles ────────────────────────────────────────────────────────────────────
-  const stageColors = STAGE_COLORS_FUSE;
+  const stageColors = STAGE_COLORS_GRID_CRM;
   const channels    = Object.keys(CHANNEL_COLORS);
   const tinyLabel   = { fontSize: 8, color: theme.textTertiary, textAlign: "center", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
   const wProps      = { editMode, onRemove: handleRemove, theme };

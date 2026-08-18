@@ -3,8 +3,8 @@ import * as XLSX from "xlsx";
 import { supabase } from "./supabase";
 import { useTheme } from "./ThemeContext.jsx";
 
-// ─── Parse the Fuse DCF template ──────────────────────────────────────────────
-// Everything we read lives on the Inp_C tab (the consolidated "Fuse View"),
+// ─── Parse the Grid CRM DCF template ──────────────────────────────────────────────
+// Everything we read lives on the Inp_C tab (the consolidated "Grid CRM View"),
 // labels in column E, values in column F. Most money lines are £k; the two
 // exceptions are flagged inline. IRR / % lines are fractions.
 function cellNum(ws, addr) {
@@ -58,7 +58,7 @@ export async function parseFinModel(file) {
 
   const irrFrac    = cellNum(ws, "F87");
   const capexK     = sumRange(ws, "F", 96, 112);
-  if (irrFrac == null && capexK == null) throw new Error("No KPIs found at the expected cells — is this the standard Fuse DCF template?");
+  if (irrFrac == null && capexK == null) throw new Error("No KPIs found at the expected cells — is this the standard Grid CRM DCF template?");
 
   const capacity   = cellNum(ws, "F57");            // Installed Capacity, MWp
   const gridCostK  = ["F97", "F98", "F99"]          // Cust. substation + contestables + non-contestables
@@ -271,7 +271,7 @@ export default function FinModelUpload({ project, onClose, onDone }) {
     <div onClick={() => !busy && onClose()} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 24 }}>
       <div onClick={e => e.stopPropagation()} style={{ width: 460, maxWidth: "100%", background: theme.elevatedBg || theme.cardBg, borderRadius: 12, border: `1px solid ${theme.cardBorder}`, padding: 24, boxShadow: "0 16px 48px rgba(0,0,0,0.5)", fontFamily: "'Inter', system-ui, sans-serif" }}>
         <div style={{ fontSize: 15, fontWeight: 700, color: theme.textPrimary, marginBottom: 4 }}>Upload Financial Model</div>
-        <div style={{ fontSize: 12, color: theme.textMuted, marginBottom: 16 }}>Excel (.xlsm/.xlsx) using the standard Fuse DCF template. KPIs are read from the <span style={{ fontFamily: "monospace" }}>Inp_C</span> tab.</div>
+        <div style={{ fontSize: 12, color: theme.textMuted, marginBottom: 16 }}>Excel (.xlsm/.xlsx) using the standard Grid CRM DCF template. KPIs are read from the <span style={{ fontFamily: "monospace" }}>Inp_C</span> tab.</div>
 
         {error && <div style={{ fontSize: 12, color: "#EF4444", background: "#EF44441A", border: "1px solid #EF444433", borderRadius: 6, padding: "8px 10px", marginBottom: 12 }}>{error}</div>}
 

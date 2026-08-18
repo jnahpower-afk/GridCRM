@@ -14,7 +14,7 @@ import { Resvg, initWasm } from "https://esm.sh/@resvg/resvg-wasm@2.6.2";
 const SLACK_WEBHOOK = Deno.env.get("SLACK_DC_GRID_WEBHOOK_URL") || Deno.env.get("SLACK_DC_WEBHOOK_URL") || "";
 const SUPABASE_URL  = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY   = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const CRM_URL = "https://fuse-platform.vercel.app";
+const CRM_URL = "https://gridcrm-two.vercel.app";
 
 const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -22,9 +22,6 @@ const TOUCH_CHANNELS = ["Email", "Call", "LinkedIn", "WhatsApp", "Meeting"];
 
 const OWNER_COLORS: Record<string, string> = {
   "Dany Dbaibo": "#43A047",
-  "alexander.garcia@fuseenergy.com": "#2F6FEB",
-  "ekaterina.abramishvili@fuseenergy.com": "#E8822E",
-  "manjodh@fuseenergy.com": "#6FBF73",
   "Cormac Mac Grory": "#16A34A",
 };
 const PALETTE = ["#43A047", "#2F6FEB", "#E8822E", "#6FBF73", "#9B5DE5", "#E0A82E", "#E84B8A", "#35B0A0"];

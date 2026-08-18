@@ -58,7 +58,7 @@ function FieldRow({ label, value, onChange, placeholder, cols = 2 }) {
   );
 }
 
-// ─── VALUATION TABLE (3-column: Assumptions | Market View | Fuse View) ───────
+// ─── VALUATION TABLE (3-column: Assumptions | Market View | Grid CRM View) ───────
 
 function ValuationTable({ rows, data, onChange, autoValues }) {
   const { theme } = useTheme();
@@ -71,12 +71,12 @@ function ValuationTable({ rows, data, onChange, autoValues }) {
       }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: theme.textPrimary, padding: "10px 14px" }}>Assumptions</div>
         <div style={{ fontSize: 13, fontWeight: 700, color: theme.textPrimary, padding: "10px 14px", borderLeft: `1px solid ${theme.textMuted}` }}>Market View</div>
-        <div style={{ fontSize: 13, fontWeight: 700, color: theme.textPrimary, padding: "10px 14px", borderLeft: `1px solid ${theme.textMuted}` }}>Fuse View</div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: theme.textPrimary, padding: "10px 14px", borderLeft: `1px solid ${theme.textMuted}` }}>Grid CRM View</div>
       </div>
       {rows.map(({ key, label, unit }, i) => {
         const autoVal = autoValues?.[key];
         const hasAuto = autoVal !== undefined && autoVal !== null;
-        const overridden = hasAuto && data[`${key}_fuse`] != null && data[`${key}_fuse`] !== "";
+        const overridden = hasAuto && data[`${key}_gridcrm`] != null && data[`${key}_gridcrm`] !== "";
         return (
         <div key={key} style={{
           display: "grid", gridTemplateColumns: "180px 1fr 1fr",
@@ -109,8 +109,8 @@ function ValuationTable({ rows, data, onChange, autoValues }) {
           <div style={{ display: "flex", alignItems: "stretch", borderLeft: `1px solid ${theme.borderSubtle}`, background: theme.elevatedBg }}>
             <input
               type="text"
-              value={hasAuto ? (overridden ? data[`${key}_fuse`] : autoVal) : (data[`${key}_fuse`] || "")}
-              onChange={e => onChange(`${key}_fuse`, e.target.value)}
+              value={hasAuto ? (overridden ? data[`${key}_gridcrm`] : autoVal) : (data[`${key}_gridcrm`] || "")}
+              onChange={e => onChange(`${key}_gridcrm`, e.target.value)}
               placeholder="—"
               style={{
                 flex: 1, background: "transparent", border: "none", outline: "none",
@@ -119,7 +119,7 @@ function ValuationTable({ rows, data, onChange, autoValues }) {
               onFocus={e => e.target.style.background = theme.accentBg}
               onBlur={e => e.target.style.background = "transparent"}
             />
-            {hasAuto && <FMBadge overridden={overridden} onRevert={() => onChange(`${key}_fuse`, "")} theme={theme} />}
+            {hasAuto && <FMBadge overridden={overridden} onRevert={() => onChange(`${key}_gridcrm`, "")} theme={theme} />}
             {unit && (
               <span style={{
                 display: "flex", alignItems: "center",

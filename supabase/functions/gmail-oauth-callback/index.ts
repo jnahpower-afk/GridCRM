@@ -13,7 +13,7 @@ const CLIENT_ID      = Deno.env.get("GMAIL_CLIENT_ID")!;
 const CLIENT_SECRET  = Deno.env.get("GMAIL_CLIENT_SECRET")!;
 const SUPABASE_URL   = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY    = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const APP_URL        = "https://fuse-platform.vercel.app";
+const APP_URL        = "https://gridcrm-two.vercel.app";
 
 serve(async (req) => {
   const url = new URL(req.url);
