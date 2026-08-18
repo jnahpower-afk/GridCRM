@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { supabase } from './supabase'
 import { useTheme } from './ThemeContext.jsx'
-import FuseLogo from './FuseLogo.jsx'
 
 export default function Auth() {
   const { theme } = useTheme()
@@ -23,7 +22,6 @@ export default function Auth() {
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: theme.pageBg }}>
       <div style={{ width: 360, background: theme.surfaceBg, border: `1px solid ${theme.border}`, borderRadius: 16, padding: 32 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 6 }}>
-          <FuseLogo size={36} />
           <div style={{ fontSize: 22, fontWeight: 800, color: theme.textPrimary, fontFamily: "'Inter', sans-serif", letterSpacing: '-0.01em' }}>
             Fuse CRM
           </div>

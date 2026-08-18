@@ -3,7 +3,6 @@ import { supabase } from './supabase'
 import { useCentralAssumptions } from './CentralAssumptions'
 import { useTheme } from "./ThemeContext.jsx"
 import EnergyLoader from "./EnergyLoader.jsx"
-import FuseLogo from './FuseLogo.jsx'
 import NewsDashboard from './NewsDashboard.jsx'
 import CompsDashboard from './CompsDashboard.jsx'
 import AcquisitionTracker from './AcquisitionTracker.jsx'

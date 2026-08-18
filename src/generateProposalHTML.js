@@ -261,13 +261,6 @@ const CSS = `
   .scroll-progress{position:fixed;top:0;left:0;height:3px;background:var(--orange);z-index:100;width:0%;transition:width .1s linear;}
 `;
 
-// ─── FUSE LOGO SVG (inline) ───────────────────────────────────────────────────
-const FUSE_LOGO_SVG = `<svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="28" height="28" rx="6" fill="#F8632C"/>
-  <path d="M7 8h10v3H10v3h6v3h-6v5H7V8z" fill="white"/>
-  <rect x="18" y="8" width="3" height="14" rx="1.5" fill="white" opacity="0.7"/>
-</svg>`;
-
 // ─── HTML GENERATOR ───────────────────────────────────────────────────────────
 export function generateProposalHTML(data) {
   const {
@@ -369,7 +362,6 @@ export function generateProposalHTML(data) {
 
 <header class="topnav" id="topnav">
   <div class="brand">
-    <span class="fuse-mark">${FUSE_LOGO_SVG}</span>
     Fuse <span class="x">×</span>
     <span style="font-weight:500;font-size:15px;color:var(--muted);">${orgName}</span>
   </div>

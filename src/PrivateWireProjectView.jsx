@@ -1,5 +1,4 @@
 import { useState, useCallback } from "react";
-import FuseLogo from "./FuseLogo.jsx";
 import { useTheme } from "./ThemeContext.jsx";
 import PrivateWireProjectOverview from "./PrivateWireProjectOverview.jsx";
 import PrivateWireProcess from "./PrivateWireProcess.jsx";
@@ -42,9 +41,6 @@ export default function PrivateWireProjectView({ org, session, onBack }) {
           onMouseEnter={e => { e.currentTarget.style.background = theme.hoverBg; }}
           onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
         >←</div>
-
-        {/* Fuse logo */}
-        <FuseLogo size={32} />
 
         {/* Org name */}
         <div style={{ fontSize: 13, fontWeight: 700, color: theme.textPrimary }}>
