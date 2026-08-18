@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
-import Auth from './Auth.jsx'
+import Auth, { PasswordSetup } from './Auth.jsx'
 import Portfolio from './Portfolio.jsx'
 import ProjectSetup from './ProjectSetup.jsx'
 import ProjectView from './ProjectView.jsx'
@@ -22,6 +22,9 @@ function Root() {
   const projectId = nav.location.project || null
   const [session, setSession]             = useState(null)
   const [loading, setLoading]             = useState(true)
+  const [needsPasswordSetup, setNeedsPasswordSetup] = useState(() =>
+    /(?:^|[#&])type=(invite|recovery)/.test(window.location.hash || '')
+  )
   const [resolvedProject, setResolvedProject] = useState(null) // deep-link fallback when no payload
   const [showNewProject, setShowNewProject]  = useState(false)
   const [taskBadge, setTaskBadge]         = useState(0)              // pending task count for sidebar badge
@@ -52,8 +55,9 @@ function Root() {
       setSession(session)
       setLoading(false)
     })
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session)
+      if (event === 'PASSWORD_RECOVERY') setNeedsPasswordSetup(true)
       if (!session) {
         nav.navigate({ section: 'topOfFunnel', subView: 'privateWire', portfolioView: 'portfolio', project: null, org: null, viewMode: undefined }, { replace: true })
       }
@@ -81,6 +85,15 @@ function Root() {
   )
 
   if (!session) return <Auth />
+
+  if (needsPasswordSetup) return (
+    <PasswordSetup
+      onComplete={() => {
+        setNeedsPasswordSetup(false)
+        nav.navigate({ section: 'topOfFunnel', subView: 'privateWire', portfolioView: 'portfolio', project: null, org: null, viewMode: undefined }, { replace: true })
+      }}
+    />
+  )
 
   return (
     <div style={{ display: 'flex', height: '100vh', background: theme.pageBg, overflow: 'hidden' }}>
