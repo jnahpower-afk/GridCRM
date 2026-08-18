@@ -50,8 +50,7 @@ function Root() {
   useEffect(() => {
     // Domain gate: this CRM is restricted to @fuseenergy.com staff. The DB
     // trigger `enforce_fuse_domain` blocks new sign-ups server-side; this
-    // client check signs out any session whose email isn't @fuseenergy.com,
-    // covering the edge case where Google's `hd` hint is bypassed.
+    // client check signs out any session whose email isn't @fuseenergy.com.
     const isFuse = (s) => !!s?.user?.email && s.user.email.toLowerCase().endsWith('@fuseenergy.com')
 
     supabase.auth.getSession().then(({ data: { session } }) => {
