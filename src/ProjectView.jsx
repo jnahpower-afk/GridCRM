@@ -6,7 +6,6 @@ import { supabase } from "./supabase.js";
 import ProjectOverview from "./ProjectOverview.jsx";
 import AcquisitionProcess from "./AcquisitionProcess.jsx";
 import { FM_VERSION_LABELS } from "./AcquisitionProcess.jsx";
-import FuseLogo from "./FuseLogo.jsx";
 import { useTheme } from "./ThemeContext.jsx";
 import ICMemoButton from "./ICMemoGenerator.jsx";
 import ModelWorkings from "./ModelWorkings.jsx";
@@ -87,9 +86,6 @@ export default function ProjectView({ session, project, onBack }) {
           onMouseEnter={e => { e.currentTarget.style.background = theme.hoverBg; }}
           onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
         >←</div>
-
-        {/* Fuse logo */}
-        <FuseLogo size={32} />
 
         {/* Project name */}
         <div style={{ fontSize: 13, fontWeight: 700, color: theme.textPrimary }}>

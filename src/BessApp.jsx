@@ -2,7 +2,6 @@ import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { supabase } from "./supabase";
 import { useCentralAssumptions } from "./CentralAssumptions";
 import { useTheme } from "./ThemeContext.jsx";
-import FuseLogo from "./FuseLogo.jsx";
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
 
@@ -1145,7 +1144,6 @@ export default function BessApp({ session, project, onBack, embedded, fmVersion 
         {!embedded && onBack && (
           <div onClick={onBack} title="Back to Portfolio" style={{ width: 34, height: 34, borderRadius: 8, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, color: theme.textTertiary, marginBottom: 4 }}>←</div>
         )}
-        {!embedded && <div style={{ marginBottom: 8 }}><FuseLogo size={32} /></div>}
         {inputSections.map(s => (
           <div key={s} onClick={() => setInputSection(s)} title={s} style={{
             width: 34, height: 34, borderRadius: 8, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",

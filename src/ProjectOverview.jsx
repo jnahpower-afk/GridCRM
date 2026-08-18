@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { supabase } from "./supabase";
-import FuseLogo from "./FuseLogo.jsx";
 import { useTheme } from "./ThemeContext.jsx";
 import { STAGES, countCompleted, getCurrentStageName, isGateDeclined } from "./AcquisitionProcess.jsx";
 
@@ -603,7 +602,6 @@ export default function ProjectOverview({ project, session, onNavigate }) {
 
         {/* Header */}
         <div style={{ marginBottom: 32 }}>
-          <FuseLogo size={36} />
           {editingName ? (
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, marginBottom: 4 }}>
               <input

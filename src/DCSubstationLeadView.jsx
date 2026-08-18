@@ -5,7 +5,6 @@ import { useState, useEffect, useCallback } from "react";
 import { Mail, Phone, MessageCircle, Users } from "lucide-react";
 import { supabase } from "./supabase.js";
 import { useTheme } from "./ThemeContext.jsx";
-import FuseLogo from "./FuseLogo.jsx";
 
 // LinkedIn glyph — matches the Private Wire lead activity logger.
 function LinkedinIcon({ size = 15, color, style }) {
@@ -121,7 +120,6 @@ export default function DCSubstationLeadView({ lead, substation, session, onBack
       {/* Top bar */}
       <div style={{ display: "flex", alignItems: "center", gap: 16, padding: "10px 20px", borderBottom: `1px solid ${theme.border}`, flexShrink: 0 }}>
         <div onClick={onBack} title="Back" style={{ width: 34, height: 34, borderRadius: 8, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, color: theme.textTertiary }}>←</div>
-        <FuseLogo size={30} />
         <div style={{ fontSize: 13, fontWeight: 700, color: theme.textPrimary }}>{form.name}</div>
         <span style={{ fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 6, background: (STATUS_COLORS[form.status] || theme.textMuted) + "22", color: STATUS_COLORS[form.status] || theme.textMuted }}>{form.status || "new"}</span>
         {substation && <span style={{ fontSize: 11, color: theme.textTertiary }}>· {substation.name || "Substation"}</span>}

@@ -1,7 +1,6 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { supabase } from "./supabase";
 import { useCentralAssumptions } from "./CentralAssumptions";
-import FuseLogo from "./FuseLogo.jsx";
 import { useTheme } from "./ThemeContext.jsx";
 import { addMonths, monthDiff, daysInMonth, computeIRR, computeNPV, SEASONALITY, calcCapexTotals, MERCHANT_HIGH, MERCHANT_CENTRAL, MERCHANT_LOW, REGO_AURORA, REGO_POWER, runDCF } from "./dcfEngine.js";
 
@@ -919,7 +918,6 @@ export default function App({ session, project, onBack, embedded, fmVersion = 1 
         {!embedded && onBack && (
           <div onClick={onBack} title="Back to Portfolio" style={{ width: 34, height: 34, borderRadius: 8, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, color: theme.textTertiary, marginBottom: 4 }}>←</div>
         )}
-        {!embedded && <div style={{ marginBottom: 8 }}><FuseLogo size={32} /></div>}
         {inputSections.map(s => (
           <div key={s} onClick={() => setInputSection(s)} title={s} style={{
             width: 34, height: 34, borderRadius: 8, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",

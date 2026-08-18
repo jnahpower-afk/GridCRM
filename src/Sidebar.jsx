@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { useTheme } from './ThemeContext.jsx'
-import FuseLogo from './FuseLogo.jsx'
 import { supabase } from './supabase.js'
 import { LayoutDashboard, Zap, Leaf, Handshake, LogOut, PanelLeftClose, PanelLeftOpen, Settings, Server } from 'lucide-react'
 
@@ -40,7 +39,7 @@ export default function Sidebar({ section, subView, onNavigate, session, taskBad
       transition: 'width 0.2s ease',
     }}>
 
-      {/* ── Logo + collapse button ── */}
+      {/* ── Brand + collapse button ── */}
       <div style={{
         padding: '0 10px',
         height: 52,
@@ -51,15 +50,11 @@ export default function Sidebar({ section, subView, onNavigate, session, taskBad
         borderBottom: `1px solid ${theme.cardBorder}`,
         flexShrink: 0,
       }}>
-        {/* Logo — hide text when collapsed */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, overflow: 'hidden', flex: collapsed ? 0 : 1 }}>
-          <FuseLogo size={26} style={{ flexShrink: 0 }} />
-          {!collapsed && (
-            <span style={{ fontSize: 15, fontWeight: 800, color: theme.textPrimary, letterSpacing: '-0.01em', whiteSpace: 'nowrap' }}>
-              Fuse Energy
-            </span>
-          )}
-        </div>
+        {!collapsed && (
+          <span style={{ flex: 1, overflow: 'hidden', fontSize: 15, fontWeight: 800, color: theme.textPrimary, letterSpacing: '-0.01em', whiteSpace: 'nowrap' }}>
+            Fuse Energy
+          </span>
+        )}
 
         {/* Collapse toggle */}
         <button
