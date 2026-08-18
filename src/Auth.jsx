@@ -12,10 +12,6 @@ export default function Auth() {
   const [password, setPassword] = useState('')
 
   const handlePasswordSignIn = async () => {
-    if (!email.toLowerCase().endsWith('@fuseenergy.com')) {
-      setError('This CRM is restricted to fuseenergy.com staff.')
-      return
-    }
     setLoading(true)
     setError(null)
     const { error } = await supabase.auth.signInWithPassword({ email, password })
@@ -48,7 +44,7 @@ export default function Auth() {
             type="email"
             value={email}
             onChange={e => setEmail(e.target.value)}
-            placeholder="you@fuseenergy.com"
+            placeholder="you@example.com"
             autoComplete="email"
             style={{ width: '100%', background: theme.inputBg, border: `1px solid ${theme.border}`, borderRadius: 8, color: theme.textPrimary, padding: '10px 12px', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
           />
@@ -72,9 +68,6 @@ export default function Auth() {
         >
           {loading ? 'Please wait…' : 'Sign in'}
         </button>
-        <div style={{ fontSize: 11, color: theme.textMuted, textAlign: 'center', marginTop: 16, lineHeight: 1.5 }}>
-          Access is restricted to @fuseenergy.com staff.
-        </div>
       </div>
     </div>
   )
