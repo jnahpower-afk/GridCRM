@@ -48,26 +48,11 @@ function Root() {
   }, [section, portfolioView, projectId, currentProject])
 
   useEffect(() => {
-    // Domain gate: this CRM is restricted to @fuseenergy.com staff. The DB
-    // trigger `enforce_fuse_domain` blocks new sign-ups server-side; this
-    // client check signs out any session whose email isn't @fuseenergy.com.
-    const isFuse = (s) => !!s?.user?.email && s.user.email.toLowerCase().endsWith('@fuseenergy.com')
-
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session && !isFuse(session)) {
-        supabase.auth.signOut()
-        setSession(null)
-      } else {
-        setSession(session)
-      }
+      setSession(session)
       setLoading(false)
     })
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session && !isFuse(session)) {
-        supabase.auth.signOut()
-        setSession(null)
-        return
-      }
       setSession(session)
       if (!session) {
         nav.navigate({ section: 'topOfFunnel', subView: 'privateWire', portfolioView: 'portfolio', project: null, org: null, viewMode: undefined }, { replace: true })
