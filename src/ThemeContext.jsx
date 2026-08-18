@@ -1,9 +1,9 @@
 import { createContext, useContext, useState, useEffect } from "react";
 
-// ─── FUSE THEME (current warm/light design) ─────────────────────────────────
+// ─── GRID_CRM THEME (current warm/light design) ─────────────────────────────────
 
-const FUSE = {
-  name: "fuse",
+const GRID_CRM = {
+  name: "gridcrm",
 
   // Page backgrounds
   pageBg: "#EEE9DF",
@@ -22,7 +22,7 @@ const FUSE = {
   borderSubtle: "#E8E3DA",
   borderHover: "#9AAAB8",
 
-  // Accent (Fuse orange)
+  // Accent (Grid CRM orange)
   accent: "#FC6A0A",
   accentBg: "#FFF3E8",
   accentHover: "#E55D06",
@@ -178,9 +178,9 @@ const LINEAR = {
 
 // ─── CONTEXT ─────────────────────────────────────────────────────────────────
 
-const ThemeContext = createContext({ theme: FUSE, themeName: "fuse", setThemeName: () => {} });
+const ThemeContext = createContext({ theme: GRID_CRM, themeName: "gridcrm", setThemeName: () => {} });
 
-const THEME_STORAGE_KEY = "solar-dcf-theme";
+const THEME_STORAGE_KEY = "grid-crm-theme";
 
 export function ThemeProvider({ children }) {
   const [themeName, setThemeName] = useState(() => {
@@ -197,7 +197,7 @@ export function ThemeProvider({ children }) {
     } catch {}
   }, [themeName]);
 
-  const theme = themeName === "linear" ? LINEAR : FUSE;
+  const theme = themeName === "linear" ? LINEAR : GRID_CRM;
 
   return (
     <ThemeContext.Provider value={{ theme, themeName, setThemeName }}>
@@ -210,4 +210,4 @@ export function useTheme() {
   return useContext(ThemeContext);
 }
 
-export { FUSE, LINEAR };
+export { GRID_CRM, LINEAR };

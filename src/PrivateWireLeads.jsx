@@ -154,7 +154,7 @@ const SECTORS = [
 const STAGES = ["New", "Contacted", "Meeting Booked", "Proposal", "Negotiation", "Won", "Lost"];
 const STAGE_LABELS = { New: "New Target" }; // display overrides — data values unchanged
 const STAGE_ORDER = { Won: 0, Negotiation: 1, Proposal: 2, "Meeting Booked": 3, Contacted: 4, New: 5, Lost: 6 };
-const STAGE_COLORS_FUSE = { New: "#6366F1", Contacted: "#2563EB", "Meeting Booked": "#FFB162", Proposal: "#FC6A0A", Negotiation: "#15803D", Won: "#4ADE80", Lost: "#C9C1B1" };
+const STAGE_COLORS_GRID_CRM = { New: "#6366F1", Contacted: "#2563EB", "Meeting Booked": "#FFB162", Proposal: "#FC6A0A", Negotiation: "#15803D", Won: "#4ADE80", Lost: "#C9C1B1" };
 const STAGE_COLORS_LINEAR = { New: "#818CF8", Contacted: "#60A5FA", "Meeting Booked": "#FBBF24", Proposal: "#FB923C", Negotiation: "#16A34A", Won: "#4ADE80", Lost: "#62666D" };
 
 const LOST_REASONS = ["No budget", "Already have supplier", "Not a priority", "Wrong timing", "No response after multiple attempts", "Other"];
@@ -252,7 +252,7 @@ function KPI({ label, value, sub, color, theme }) {
 }
 
 function StageBadge({ stage, theme }) {
-  const colors = theme.name === "linear" ? STAGE_COLORS_LINEAR : STAGE_COLORS_FUSE;
+  const colors = theme.name === "linear" ? STAGE_COLORS_LINEAR : STAGE_COLORS_GRID_CRM;
   const c = colors[stage] || theme.textTertiary;
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600, color: c, background: `${c}18`, padding: "3px 8px", borderRadius: 4 }}>
@@ -604,7 +604,7 @@ export default function PrivateWireLeads({ onTaskBadgeChange, campaignScope = nu
   // neglected lead with several overdue steps counts once, not once per step.
   const myDueLeadCount = useMemo(() => {
     const today = new Date().toISOString().slice(0, 10);
-    const cu = (typeof localStorage !== "undefined" && localStorage.getItem("fuse_current_user")) || "";
+    const cu = (typeof localStorage !== "undefined" && localStorage.getItem("gridcrm_current_user")) || "";
     const dueLeads = new Set();
     for (const t of seqTasks) {
       if (t.status !== "pending" || t.due_date > today) continue;
@@ -920,7 +920,7 @@ export default function PrivateWireLeads({ onTaskBadgeChange, campaignScope = nu
     return () => window.removeEventListener("keydown", onKey);
   }, [viewMode]);
 
-  const stageColors = theme.name === "linear" ? STAGE_COLORS_LINEAR : STAGE_COLORS_FUSE;
+  const stageColors = theme.name === "linear" ? STAGE_COLORS_LINEAR : STAGE_COLORS_GRID_CRM;
 
   // Campaign-scoped subset — KPIs, pipeline funnel, and the per-campaign
   // tab counts all derive from this. Defaults to PW for any pre-Campaign-

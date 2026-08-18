@@ -18,7 +18,7 @@ function fmtDate(iso) {
 }
 
 // A person may be stored as a full name ("Joseph Lord") or an email
-// ("joseph.lord@fuseenergy.com"). Reduce either to a friendly first name + initials.
+// ("user@example.com"). Reduce either to a friendly first name + initials.
 function nameParts(name) {
   if (!name) return [];
   if (name.includes("@")) return name.split("@")[0].split(/[._-]/).filter(Boolean);

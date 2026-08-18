@@ -397,11 +397,11 @@ export default function TaskQueue({
   const todayStr = new Date().toISOString().slice(0, 10);
 
   const [channelFilter, setChannelFilter] = useState("All");
-  const [myTasksOnly, setMyTasksOnly]     = useState(() => localStorage.getItem("fuse_my_tasks_only") !== "false");
-  const [currentUser, setCurrentUser]     = useState(() => localStorage.getItem("fuse_current_user") || "");
+  const [myTasksOnly, setMyTasksOnly]     = useState(() => localStorage.getItem("gridcrm_my_tasks_only") !== "false");
+  const [currentUser, setCurrentUser]     = useState(() => localStorage.getItem("gridcrm_current_user") || "");
 
-  useEffect(() => { localStorage.setItem("fuse_my_tasks_only", String(myTasksOnly)); }, [myTasksOnly]);
-  useEffect(() => { if (currentUser) localStorage.setItem("fuse_current_user", currentUser); }, [currentUser]);
+  useEffect(() => { localStorage.setItem("gridcrm_my_tasks_only", String(myTasksOnly)); }, [myTasksOnly]);
+  useEffect(() => { if (currentUser) localStorage.setItem("gridcrm_current_user", currentUser); }, [currentUser]);
 
   // Lookup maps
   const leadsMap  = Object.fromEntries(leads.map(l => [l.id, { ...l, _calendarLink: calendarLinks?.[l.owner] || "" }]));

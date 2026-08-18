@@ -149,7 +149,7 @@ serve(async (req) => {
       }
     }
     blocks.push({ type: "divider" });
-    blocks.push({ type: "actions", elements: [{ type: "button", text: { type: "plain_text", text: "Open CRM →", emoji: true }, url: "https://fuse-platform.vercel.app", style: "primary" }] });
+    blocks.push({ type: "actions", elements: [{ type: "button", text: { type: "plain_text", text: "Open CRM →", emoji: true }, url: "https://gridcrm-two.vercel.app", style: "primary" }] });
 
     if (dryRun) {
       const textPreview = [`Data Centres — End of Day, last ${WINDOW_DAYS} days (${from} → ${today})`,

@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS news_articles (
   region        TEXT,                          -- 'UK', 'Europe', 'Ireland', 'Spain', etc.
 
   -- Ranking
-  relevance_score NUMERIC(4,2) DEFAULT 0,     -- 0-10 score for Fuse acquisition/development relevance
+  relevance_score NUMERIC(4,2) DEFAULT 0,     -- 0-10 score for Grid CRM acquisition/development relevance
 
   -- Metadata
   created_at    TIMESTAMPTZ DEFAULT NOW(),

@@ -23,11 +23,11 @@ export default function Auth() {
       <div style={{ width: 360, background: theme.surfaceBg, border: `1px solid ${theme.border}`, borderRadius: 16, padding: 32 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 6 }}>
           <div style={{ fontSize: 22, fontWeight: 800, color: theme.textPrimary, fontFamily: "'Inter', sans-serif", letterSpacing: '-0.01em' }}>
-            Fuse CRM
+            Grid CRM
           </div>
         </div>
         <div style={{ fontSize: 13, color: theme.textTertiary, marginBottom: 24 }}>
-          Sign in with your Fuse CRM account
+          Sign in with your Grid CRM account
         </div>
 
         {error && (

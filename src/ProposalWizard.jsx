@@ -11,18 +11,18 @@ const STEPS = [
   { id: "review",   label: "Review & Generate" },
 ];
 
-const TEAM_EMAILS = {
-  "Laurie Campbell": "laurie.campbell@fuseenergy.com",
-  "Max Karous":      "max.karous@fuseenergy.com",
-  "Maher Chaabane":  "maher.chaabane@fuseenergy.com",
-  "Dany Dbaibo":     "dany.dbaibo@fuseenergy.com",
-  "Eoin McEvoy":     "eoin.mcevoy@fuseenergy.com",
-};
+const TEAM_MEMBERS = [
+  "Laurie Campbell",
+  "Max Karous",
+  "Maher Chaabane",
+  "Dany Dbaibo",
+  "Eoin McEvoy",
+];
 
 const MONTHS_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 // ─── DCF PARSER ──────────────────────────────────────────────────────────────
-// Extracts all relevant data from the Fuse DCF Excel workbook using SheetJS.
+// Extracts all relevant data from the Grid CRM DCF Excel workbook using SheetJS.
 function parseDCF(workbook) {
   // ── 1. WMP Proposal sheet ─────────────────────────────────────────────────
   // Find the sheet with "Proposal" in the name (could be named differently per client)
@@ -236,7 +236,6 @@ export default function ProposalWizard({ lead, onClose }) {
   function setClientField(k, v) { setClient(p => ({ ...p, [k]: v })); }
   function handlePreparerNameChange(name) {
     setClientField("preparerName", name);
-    if (TEAM_EMAILS[name]) setClientField("preparerEmail", TEAM_EMAILS[name]);
   }
 
   // ── Step 1: DCF Upload ────────────────────────────────────────────────────
@@ -254,7 +253,7 @@ export default function ProposalWizard({ lead, onClose }) {
       const wb  = XLSX.read(buf, { type: "array" });
       const result = parseDCF(wb);
       if (!result.annualDemandMWh || result.sensRows.length === 0) {
-        throw new Error("Could not find expected data. Make sure this is a Fuse DCF workbook.");
+        throw new Error("Could not find expected data. Make sure this is a Grid CRM DCF workbook.");
       }
       setDcf(result);
       // Pre-fill PPA term from the client state
@@ -334,7 +333,7 @@ export default function ProposalWizard({ lead, onClose }) {
 
       const a = document.createElement("a");
       a.href = url;
-      a.download = `Fuse-Proposal-${client.orgName.replace(/\s+/g, "-")}-${new Date().toISOString().slice(0, 10)}.html`;
+      a.download = `Grid-CRM-Proposal-${client.orgName.replace(/\s+/g, "-")}-${new Date().toISOString().slice(0, 10)}.html`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -440,12 +439,12 @@ export default function ProposalWizard({ lead, onClose }) {
                 <WizardSelect
                   value={client.preparerName}
                   onChange={handlePreparerNameChange}
-                  options={["", ...Object.keys(TEAM_EMAILS)]}
+                  options={["", ...TEAM_MEMBERS]}
                   theme={theme}
                 />
               </WizardField>
               <WizardField label="Email" theme={theme}>
-                <WizardInput value={client.preparerEmail} onChange={v => setClientField("preparerEmail", v)} placeholder="name@fuseenergy.com" theme={theme} />
+                <WizardInput value={client.preparerEmail} onChange={v => setClientField("preparerEmail", v)} placeholder="name@example.com" theme={theme} />
               </WizardField>
               <WizardField label="Proposal Date" theme={theme}>
                 <WizardInput type="date" value={client.proposalDate} onChange={v => setClientField("proposalDate", v)} theme={theme} />
@@ -457,7 +456,7 @@ export default function ProposalWizard({ lead, onClose }) {
           {step === 1 && (
             <div>
               <div style={{ fontSize: 13, color: theme.textSecondary, marginBottom: 20, lineHeight: 1.6 }}>
-                Upload the Fuse DCF workbook for <strong>{client.orgName}</strong>. The wizard will read the annual demand, PPA pricing, actual monthly energy profile, and MWp sensitivity table directly from the file.
+                Upload the Grid CRM DCF workbook for <strong>{client.orgName}</strong>. The wizard will read the annual demand, PPA pricing, actual monthly energy profile, and MWp sensitivity table directly from the file.
               </div>
 
               {/* Drop zone */}
