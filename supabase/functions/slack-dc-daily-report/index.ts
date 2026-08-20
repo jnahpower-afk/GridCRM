@@ -1,7 +1,8 @@
 // Supabase Edge Function: slack-dc-daily-report
 // Renders the Data Centres Daily Report as a SINGLE image and posts it to Slack.
-// Sections: 1) Assets-added time series (30d, by person)  2) Team output table
-// (last 24h, incl. touch points)  3) Grid Apps Submitted capacity pipeline
+// Sections: 1) Team-output time series (30d, by person — substations, parcels,
+// leads, surgeries and touch points)  2) Team output table (last 24h, incl.
+// touch points)  3) Grid Apps Submitted capacity pipeline
 // 4) Grid Connection Acqui (DC-lead outbound touches, last 7d, by owner).
 // Builds one SVG, rasterises to PNG via resvg-wasm, uploads to the public
 // `dc-reports` bucket, then posts an image block to the DC channel.
@@ -24,8 +25,26 @@ const OWNER_COLORS: Record<string, string> = {
   "Dany Dbaibo": "#43A047",
   "Cormac Mac Grory": "#16A34A",
 };
-const PALETTE = ["#43A047", "#2F6FEB", "#E8822E", "#6FBF73", "#9B5DE5", "#E0A82E", "#E84B8A", "#35B0A0"];
+// Fallback hues for people without a fixed OWNER_COLOR — deliberately ordered
+// to differ from the fixed owner colours above (purple, pink, teal, …).
+const PALETTE = ["#9B5DE5", "#E84B8A", "#35B0A0", "#E0A82E", "#4A72E0", "#43A047", "#E8822E", "#6FBF73"];
 const PIPE_PALETTE = ["#F28C3B", "#3DB6D6", "#4CAF50", "#E45B4E", "#9B5DE5", "#E0A82E", "#4A72E0", "#E84B8A", "#35B0A0", "#E0902E", "#8B7BE8"];
+
+// Assign a unique colour to each person: fixed OWNER_COLORS first, then palette
+// hues that aren't already taken — so no two people ever share a colour.
+function assignColors(people: string[]): Record<string, string> {
+  const map: Record<string, string> = {};
+  const used = new Set<string>();
+  people.forEach(n => { const c = OWNER_COLORS[n]; if (c) { map[n] = c; used.add(c); } });
+  let pi = 0;
+  people.forEach(n => {
+    if (map[n]) return;
+    while (pi < PALETTE.length && used.has(PALETTE[pi])) pi++;
+    const c = PALETTE[pi % PALETTE.length];
+    map[n] = c; used.add(c); pi++;
+  });
+  return map;
+}
 
 const esc = (s: string) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 const fmtMwp = (n: number) => (n % 1 === 0 ? String(n) : n.toFixed(1));
@@ -62,16 +81,17 @@ serve(async (req) => {
       supabase.from("dc_network_features").select("created_by, type, substation_id, created_at").gte("created_at", days30[0] + "T00:00:00"),
       supabase.from("dc_substation_leads").select("created_by, created_at").gte("created_at", days30[0] + "T00:00:00"),
       supabase.from("dc_grid_surgeries").select("created_by, requested_at, held_at, status"),
-      supabase.from("dc_substation_lead_activity").select("created_by, channel, created_at").gte("created_at", since24),
+      supabase.from("dc_substation_lead_activity").select("created_by, channel, created_at").gte("created_at", days30[0] + "T00:00:00"),
       supabase.from("dc_projects").select("name, mwp, status").eq("status", "Grid App Submitted"),
       supabase.from("private_wire_activity_log").select("date, direction, private_wire_leads!inner(owner, campaign)").eq("private_wire_leads.campaign", "DC").gte("date", days7[0]),
     ]);
     const profs = profsR.data || [];
     const nameOf = (id: string | null) => { const p = profs.find((x: any) => x.id === id); return p ? (p.full_name || p.email || "Unknown") : "Unassigned"; };
     const firstName = (n: string) => n.includes("@") ? (() => { const l = n.split("@")[0].split(/[._-]/).filter(Boolean)[0] || n; return l.charAt(0).toUpperCase() + l.slice(1); })() : n.split(/\s+/)[0];
-    const colorFor = (n: string, i: number) => OWNER_COLORS[n] || PALETTE[i % PALETTE.length];
 
-    // ── A: time series (30d, assets by person) ──
+    // ── A: time series (30d, full team output by person) ──
+    // Mirrors the CRM "Team Output" dashboard chart: substations, parcels,
+    // leads, surgeries requested, surgeries held and touch points.
     const tsPer: Record<string, Record<string, number>> = {};
     const tsPeopleSet = new Set<string>();
     const tsBump = (date: string | null, id: string | null) => {
@@ -80,7 +100,10 @@ serve(async (req) => {
     };
     (featsR.data || []).forEach((f: any) => { if (f.substation_id || (f.type || "").startsWith("substation")) tsBump(f.created_at, f.created_by); });
     (leadsR.data || []).forEach((l: any) => tsBump(l.created_at, l.created_by));
+    (surgR.data || []).forEach((s: any) => { tsBump(s.requested_at, s.created_by); if (s.status === "held") tsBump(s.held_at, s.created_by); });
+    (actsR.data || []).forEach((a: any) => { if (TOUCH_CHANNELS.includes(a.channel)) tsBump(a.created_at, a.created_by); });
     const tsPeople = [...tsPeopleSet].sort();
+    const tsColors = assignColors(tsPeople);
 
     // ── B: 24h table ──
     type Row = { subs: number; parcels: number; leads: number; sReq: number; sDone: number; touches: number };
@@ -108,6 +131,7 @@ serve(async (req) => {
       (orPer[dd] = orPer[dd] || {})[owner] = (orPer[dd][owner] || 0) + 1; orPeopleSet.add(owner);
     });
     const orPeople = [...orPeopleSet].sort();
+    const orColors = assignColors(orPeople);
 
     // ══════════ BUILD SVG ══════════
     const W = 1240, PADX = 48, PLOT_L = 92, PLOT_R = 1192;
@@ -121,10 +145,10 @@ serve(async (req) => {
     y += 26; T(PADX, y, fullDate(todayStr), 14, "#8A8A90", 400);
 
     // ── section 1 ──
-    y += 46; T(PADX, y, "1 · TIME SERIES — ASSETS ADDED · LAST 30 DAYS", 14, "#8A8A90", 700);
+    y += 46; T(PADX, y, "1 · TEAM OUTPUT — LAST 30 DAYS", 14, "#8A8A90", 700);
     // legend
     y += 26; let lx = PADX;
-    tsPeople.forEach((p, i) => { parts.push(`<rect x="${lx}" y="${y - 11}" width="13" height="13" rx="2" fill="${colorFor(p, i)}"/>`); T(lx + 19, y, p, 13, "#C7C7CC"); lx += 26 + p.length * 7.2 + 20; });
+    tsPeople.forEach((p) => { parts.push(`<rect x="${lx}" y="${y - 11}" width="13" height="13" rx="2" fill="${tsColors[p]}"/>`); T(lx + 19, y, p, 13, "#C7C7CC"); lx += 26 + p.length * 7.2 + 20; });
     // plot
     const p1Top = y + 24, p1H = 300, p1Bot = p1Top + p1H;
     let maxTot = 1;
@@ -142,7 +166,7 @@ serve(async (req) => {
       tsPeople.forEach((p, pi) => {
         const v = row[p] || 0; if (!v) return; tot += v;
         const h = (v / (step1 * 4)) * p1H; acc -= h;
-        parts.push(`<rect x="${(cx - bw1 / 2).toFixed(1)}" y="${acc.toFixed(1)}" width="${bw1.toFixed(1)}" height="${h.toFixed(1)}" fill="${colorFor(p, pi)}"/>`);
+        parts.push(`<rect x="${(cx - bw1 / 2).toFixed(1)}" y="${acc.toFixed(1)}" width="${bw1.toFixed(1)}" height="${h.toFixed(1)}" fill="${tsColors[p]}"/>`);
       });
       if (tot > 0) T(cx, acc - 8, String(tot), 12.5, "#F5F5F5", 700, "middle");
     });
@@ -207,7 +231,7 @@ serve(async (req) => {
     y += 22; T(PADX, y, "Stacked by owner. Each unit = one outbound touch on that date. · Last 7 days (DC leads)", 12, "#8A8A90");
     // legend
     y += 26; lx = PADX;
-    orPeople.forEach((p, i) => { parts.push(`<rect x="${lx}" y="${y - 11}" width="13" height="13" rx="2" fill="${colorFor(p, i)}"/>`); T(lx + 19, y, p, 13, "#C7C7CC"); lx += 26 + p.length * 7.2 + 20; });
+    orPeople.forEach((p) => { parts.push(`<rect x="${lx}" y="${y - 11}" width="13" height="13" rx="2" fill="${orColors[p]}"/>`); T(lx + 19, y, p, 13, "#C7C7CC"); lx += 26 + p.length * 7.2 + 20; });
     const p4Top = y + 22, p4H = 200, p4Bot = p4Top + p4H;
     let maxO = 1;
     days7.forEach(d => { const t = Object.values(orPer[d] || {}).reduce((s, n) => s + n, 0); if (t > maxO) maxO = t; });
@@ -217,7 +241,7 @@ serve(async (req) => {
     let anyO = false;
     days7.forEach((d, i) => {
       const cx = PLOT_L + (i + 0.5) * slot4; const row = orPer[d] || {}; let acc = p4Bot; let tot = 0;
-      orPeople.forEach((p, pi) => { const v = row[p] || 0; if (!v) return; anyO = true; tot += v; const h = (v / (step4 * 2)) * p4H; acc -= h; parts.push(`<rect x="${(cx - bw4 / 2).toFixed(1)}" y="${acc.toFixed(1)}" width="${bw4.toFixed(1)}" height="${h.toFixed(1)}" fill="${colorFor(p, pi)}"/>`); });
+      orPeople.forEach((p) => { const v = row[p] || 0; if (!v) return; anyO = true; tot += v; const h = (v / (step4 * 2)) * p4H; acc -= h; parts.push(`<rect x="${(cx - bw4 / 2).toFixed(1)}" y="${acc.toFixed(1)}" width="${bw4.toFixed(1)}" height="${h.toFixed(1)}" fill="${orColors[p]}"/>`); });
       if (tot > 0) T(cx, acc - 8, String(tot), 12.5, "#F5F5F5", 700, "middle");
     });
     if (!anyO) T((PLOT_L + PLOT_R) / 2, p4Top + p4H / 2, "No outreach logged in the last 7 days", 13, "#5A5A60", 400, "middle");

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from './supabase'
 import { useTheme } from './ThemeContext.jsx'
 
@@ -18,12 +18,45 @@ export default function ProjectSetup({ session, onCreated, onCancel }) {
   const [cod, setCod] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  // Portfolio membership — the project is still DD'd and modelled on its own;
+  // this only records that it was acquired as part of a wider deal.
+  const [inPortfolio, setInPortfolio] = useState(false)
+  const [portfolios, setPortfolios] = useState([])
+  const [portfolioId, setPortfolioId] = useState('')   // '' = create new
+  const [newPortfolioName, setNewPortfolioName] = useState('')
+
+  useEffect(() => {
+    supabase.from('portfolios').select('id, name').order('name')
+      .then(({ data }) => setPortfolios(data || []))
+  }, [])
+
+  // Reuse an existing portfolio by name (case-insensitive) rather than creating
+  // a near-duplicate — the DB has a unique index on lower(name) regardless.
+  const resolvePortfolioId = async () => {
+    if (!inPortfolio) return null
+    if (portfolioId) return portfolioId
+    const wanted = newPortfolioName.trim()
+    if (!wanted) throw new Error('Please name the portfolio, or pick an existing one')
+    const existing = portfolios.find(p => p.name.toLowerCase() === wanted.toLowerCase())
+    if (existing) return existing.id
+    const { data, error } = await supabase
+      .from('portfolios')
+      .insert({ name: wanted, created_by: session.user.id })
+      .select()
+      .single()
+    if (error) throw new Error(error.message)
+    return data.id
+  }
 
   const handleCreate = async () => {
     if (!name.trim()) { setError('Please enter a project name'); return }
     if (!capacity || isNaN(capacity)) { setError('Please enter a valid capacity'); return }
     setLoading(true)
     setError(null)
+
+    let pfId = null
+    try { pfId = await resolvePortfolioId() }
+    catch (e) { setError(e.message); setLoading(false); return }
 
     const { data, error } = await supabase
       .from('projects')
@@ -35,6 +68,7 @@ export default function ProjectSetup({ session, onCreated, onCancel }) {
         team_name: team,
         capacity_mwp: parseFloat(capacity),
         cod: cod ? cod + '-01' : null,
+        portfolio_id: pfId,
         created_by: session.user.id,
       })
       .select()
@@ -96,6 +130,37 @@ export default function ProjectSetup({ session, onCreated, onCancel }) {
             <label style={{ fontSize: 11, color: theme.textSecondary, display: 'block', marginBottom: 6, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>COD (Target)</label>
             <input type="month" value={cod} onChange={e => setCod(e.target.value)} style={inputStyle} />
           </div>
+        </div>
+
+        {/* Portfolio membership */}
+        <div style={{ marginBottom: 16, padding: '12px 14px', background: theme.pillBg, border: `1px solid ${theme.border}`, borderRadius: 8 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 9, cursor: 'pointer' }}>
+            <input type="checkbox" checked={inPortfolio} onChange={e => setInPortfolio(e.target.checked)} style={{ cursor: 'pointer', accentColor: theme.accent, width: 15, height: 15 }} />
+            <span style={{ fontSize: 12, fontWeight: 600, color: theme.textPrimary }}>Part of a portfolio</span>
+            <span style={{ fontSize: 11, color: theme.textTertiary }}>· acquired alongside other projects</span>
+          </label>
+          {inPortfolio && (
+            <div style={{ marginTop: 12 }}>
+              {portfolios.length > 0 && (
+                <select
+                  value={portfolioId}
+                  onChange={e => setPortfolioId(e.target.value)}
+                  style={{ ...inputStyle, marginBottom: portfolioId ? 0 : 8, cursor: 'pointer' }}
+                >
+                  <option value="">+ New portfolio…</option>
+                  {portfolios.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              )}
+              {!portfolioId && (
+                <input
+                  value={newPortfolioName}
+                  onChange={e => setNewPortfolioName(e.target.value)}
+                  placeholder="Portfolio name, e.g. WSE"
+                  style={inputStyle}
+                />
+              )}
+            </div>
+          )}
         </div>
 
         {error && (

@@ -54,6 +54,27 @@ serve(async (req) => {
 
     // 3. Persist tokens (upsert on owner_name)
     const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
+
+    // Reject a mailbox already claimed by a different owner. Without this, one
+    // person completing consent on someone else's Google account silently
+    // creates a second row for that mailbox, and gmail-send — which looks the
+    // sending account up by owner_name — then sends their outreach from the
+    // wrong inbox, with replies landing there too. A unique index on
+    // gmail_email backs this up; the check exists to give a usable message.
+    const { data: clash } = await supabase
+      .from("user_gmail_settings")
+      .select("owner_name")
+      .eq("gmail_email", gmailEmail)
+      .neq("owner_name", ownerName)
+      .maybeSingle();
+
+    if (clash) {
+      throw new Error(
+        `${gmailEmail} is already connected as ${clash.owner_name}. ` +
+        `Sign out of Google (or use a private window) and reconnect as ${ownerName}.`
+      );
+    }
+
     const { error } = await supabase.from("user_gmail_settings").upsert({
       owner_name:    ownerName,
       gmail_email:   gmailEmail,

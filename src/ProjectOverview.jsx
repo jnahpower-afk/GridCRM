@@ -5,7 +5,7 @@ import { STAGES, countCompleted, getCurrentStageName, isGateDeclined } from "./A
 
 // ─── COLLAPSIBLE SECTION ─────────────────────────────────────────────────────
 
-function Section({ title, defaultOpen = true, children }) {
+function Section({ title, defaultOpen = true, meta, children }) {
   const { theme } = useTheme();
   const [open, setOpen] = useState(defaultOpen);
   return (
@@ -24,6 +24,7 @@ function Section({ title, defaultOpen = true, children }) {
           fontSize: 12, color: theme.textTertiary,
         }}>▼</span>
         {title}
+        {meta && <span onClick={e => e.stopPropagation()} style={{ cursor: "default" }}>{meta}</span>}
       </div>
       {open && <div style={{ paddingLeft: 4 }}>{children}</div>}
     </div>
@@ -163,6 +164,51 @@ function FreeText({ value, onChange, placeholder }) {
       onFocus={e => e.target.style.borderColor = theme.accent}
       onBlur={e => e.target.style.borderColor = theme.borderSubtle}
     />
+  );
+}
+
+// ─── IMMEDIATE PLAN HISTORY ──────────────────────────────────────────────────
+// Read-only archive of previous plans, collapsed by default so the section
+// reads as just the current plan. Entries are written by "Mark as updated".
+
+function PlanHistory({ entries }) {
+  const { theme } = useTheme();
+  const [open, setOpen] = useState(false);
+  if (!entries?.length) return null;
+  return (
+    <div style={{ marginTop: 10 }}>
+      <div
+        onClick={() => setOpen(!open)}
+        style={{
+          display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer",
+          fontSize: 11, color: theme.textTertiary, fontWeight: 600, userSelect: "none",
+        }}
+      >
+        <span style={{
+          display: "inline-block", transition: "transform 0.2s", fontSize: 9,
+          transform: open ? "rotate(0deg)" : "rotate(-90deg)",
+        }}>▼</span>
+        {entries.length} previous {entries.length === 1 ? "update" : "updates"}
+      </div>
+      {open && (
+        <div style={{
+          marginTop: 8, borderLeft: `2px solid ${theme.borderSubtle}`, paddingLeft: 12,
+          display: "flex", flexDirection: "column", gap: 12,
+        }}>
+          {entries.map((e, i) => (
+            <div key={`${e.at}-${i}`}>
+              <div style={{ fontSize: 10, color: theme.textTertiary, fontWeight: 600, marginBottom: 3 }}>
+                {fmtDateTime(e.at)}{e.by ? ` · ${e.by}` : ""}
+              </div>
+              <div style={{
+                fontSize: 12, color: theme.textSecondary, lineHeight: 1.6,
+                whiteSpace: "pre-wrap", wordBreak: "break-word",
+              }}>{e.text}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -362,6 +408,16 @@ function fmtGBP(v) {
   return `£${v.toFixed(0)}`;
 }
 
+// Keeps the project_overview.data blob from growing without bound.
+const PLAN_HISTORY_LIMIT = 20;
+
+function fmtDateTime(v) {
+  if (!v) return null;
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) return String(v);
+  return d.toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
 function fmtDate(v) {
   if (!v) return null;
   const d = new Date(v);
@@ -495,6 +551,45 @@ export default function ProjectOverview({ project, session, onNavigate }) {
 
     return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
   }, [data, project]);
+
+  // ─── Immediate Plan: "mark as updated" stamp ──────────────────────────────
+  // The plan text autosaves continuously; this records when someone last
+  // confirmed it is current. The snapshot lets us flag edits made since.
+  const markPlanUpdated = useCallback(async () => {
+    const uid = session?.user?.id;
+    let name = session?.user?.email || null;
+    if (uid) {
+      const { data: prof } = await supabase.from("profiles").select("full_name, email").eq("id", uid).maybeSingle();
+      if (prof) name = prof.full_name?.trim() || prof.email || name;
+    }
+    setData(prev => {
+      const text = prev.immediate_plan || "";
+      const history = Array.isArray(prev.immediate_plan_history) ? prev.immediate_plan_history : [];
+      // Only archive when the wording actually moved on — re-marking an
+      // unchanged plan bumps the date without adding a duplicate entry.
+      const superseded = prev.immediate_plan_marked_text || "";
+      const changed = superseded.trim() !== "" && text !== superseded;
+      // Archive the version being replaced, stamped with when *it* was marked,
+      // so the current plan lives only in the box above and never duplicates.
+      const nextHistory = changed
+        ? [{
+            at: prev.immediate_plan_updated_at || new Date().toISOString(),
+            by: prev.immediate_plan_updated_by || null,
+            text: superseded,
+          }, ...history].slice(0, PLAN_HISTORY_LIMIT)
+        : history;
+      return {
+        ...prev,
+        immediate_plan_history: nextHistory,
+        immediate_plan_updated_at: new Date().toISOString(),
+        immediate_plan_updated_by: name,
+        immediate_plan_marked_text: text,
+      };
+    });
+  }, [session]);
+
+  const planStale = !!data.immediate_plan_updated_at
+    && (data.immediate_plan || "") !== (data.immediate_plan_marked_text || "");
 
   const updateField = useCallback(async (key, value) => {
     setData(prev => ({ ...prev, [key]: value }));
@@ -729,13 +824,43 @@ export default function ProjectOverview({ project, session, onNavigate }) {
           </div>
         </div>
 
-        {/* Immediate Plan */}
-        <Section title="Immediate Plan">
+        {/* Immediate Plan / Update */}
+        <Section
+          title="Immediate Plan / Update"
+          meta={data.immediate_plan_updated_at && (
+            <span style={{ fontSize: 11, fontWeight: 500, color: planStale ? (theme.warning || "#F59E0B") : theme.textTertiary }}>
+              Last updated {fmtDateTime(data.immediate_plan_updated_at)}
+              {data.immediate_plan_updated_by ? ` by ${data.immediate_plan_updated_by}` : ""}
+              {planStale ? " · edited since" : ""}
+            </span>
+          )}
+        >
           <FreeText
             value={data.immediate_plan}
             onChange={v => updateField("immediate_plan", v)}
             placeholder="Describe the immediate plan for this project..."
           />
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 8 }}>
+            <button
+              onClick={markPlanUpdated}
+              style={{
+                fontSize: 11, fontWeight: 700, padding: "6px 12px", borderRadius: 6, cursor: "pointer",
+                color: planStale ? "#fff" : theme.textSecondary,
+                background: planStale ? theme.accent : theme.pillBg,
+                border: `1px solid ${planStale ? theme.accent : (theme.pillBorder || theme.borderSubtle)}`,
+                fontFamily: "inherit",
+              }}
+            >Mark as updated</button>
+            {!data.immediate_plan_updated_at && (
+              <span style={{ fontSize: 11, color: theme.textTertiary }}>Never marked as updated</span>
+            )}
+            {planStale && (
+              <span style={{ fontSize: 11, color: theme.warning || "#F59E0B" }}>
+                Plan edited since it was last marked
+              </span>
+            )}
+          </div>
+          <PlanHistory entries={data.immediate_plan_history} />
         </Section>
 
         {/* Executive Summary */}

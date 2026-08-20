@@ -593,6 +593,10 @@ export default function PrivateWireDashboard({ leads: leadsRaw, theme, hideTeamS
   const [dcProfiles, setDcProfiles] = useState([]);
   const [dcGrowthView, setDcGrowthView] = useState("person"); // "person" | "type"
   const [dcShowTouches, setDcShowTouches] = useState(true);    // include touch points in output
+  // The leads list no longer loads full activity (per-lead aggregates only), so
+  // the dashboard's outreach charts fetch activity themselves (from OUTREACH_START,
+  // scoped to the active campaign). null = still loading.
+  const [dashActivities, setDashActivities] = useState(null);
   useEffect(() => {
     if (!isDC) return;
     let cancelled = false;
@@ -662,7 +666,18 @@ export default function PrivateWireDashboard({ leads: leadsRaw, theme, hideTeamS
   }, [range, todayDate]);
 
   const allLeads = leads;
-  const allActivities = allLeads.flatMap(l => (l.activityLog || []).map(a => ({ ...a, leadName: l.name, leadSector: l.sector, leadOwner: l.owner })));
+  const leadsById = useMemo(() => {
+    const m = new Map();
+    for (const l of allLeads) m.set(l.id, l);
+    return m;
+  }, [allLeads]);
+  const allActivities = useMemo(
+    () => (dashActivities || []).map(a => {
+      const l = leadsById.get(a.lead_id);
+      return { ...a, leadName: l?.name, leadSector: l?.sector, leadOwner: l?.owner };
+    }),
+    [dashActivities, leadsById],
+  );
 
   // Outreach = outbound touches only — inbound responses are not counted as reach-outs
   const rangeActivities = allActivities.filter(a => a.date >= rangeStartDate && a.date <= todayDate && a.direction !== "Inbound");
@@ -677,6 +692,37 @@ export default function PrivateWireDashboard({ leads: leadsRaw, theme, hideTeamS
   // ─── OUTREACH TIME SERIES (from 6 Apr 2026) ──────────────────────────────
   const OUTREACH_START = "2026-04-06";
   const outreachDays = getDaysBetween(OUTREACH_START, todayDate);
+
+  // Fetch activity for the dashboard's charts (from OUTREACH_START), scoped to
+  // the active campaign, paged in concurrent batches. Only the dashboard view
+  // pays this — the leads list stays on per-lead aggregates.
+  useEffect(() => {
+    let cancelled = false;
+    setDashActivities(null);
+    (async () => {
+      const scope = q => {
+        if (campaign === "DC") return q.eq("private_wire_leads.campaign", "DC");
+        if (campaign === "PW") return q.or("campaign.eq.PW,campaign.is.null", { referencedTable: "private_wire_leads" });
+        return q; // "All"
+      };
+      const PAGE = 5000, BATCH = 4;
+      let all = [], from = 0, done = false;
+      while (!done) {
+        const reqs = [];
+        for (let b = 0; b < BATCH; b++) {
+          const s = from + b * PAGE;
+          reqs.push(scope(supabase.from("private_wire_activity_log")
+            .select("lead_id,date,direction,channel,response,private_wire_leads!inner(campaign)")
+            .gte("date", OUTREACH_START).order("date", { ascending: false }).order("id")).range(s, s + PAGE - 1));
+        }
+        const res = await Promise.all(reqs);
+        for (const { data, error } of res) { if (error) throw error; all = all.concat(data || []); if ((data || []).length < PAGE) done = true; }
+        from += BATCH * PAGE;
+      }
+      if (!cancelled) setDashActivities(all);
+    })().catch(e => { console.error("Dashboard activity load failed:", e); if (!cancelled) setDashActivities([]); });
+    return () => { cancelled = true; };
+  }, [campaign]);
   const outreachTimeSeries = useMemo(() => {
     return outreachDays.map(date => {
       // Outbound only — matches KPI definition
@@ -719,7 +765,7 @@ export default function PrivateWireDashboard({ leads: leadsRaw, theme, hideTeamS
   const responseRate = totalTouches > 0 ? Math.round((totalResponses / totalTouches) * 100) : 0;
   const avgDailyTouches = days.length > 0 ? (totalTouches / days.length).toFixed(1) : 0;
   const newLeadsInRange = allLeads.filter(l => l.created_at && l.created_at.slice(0, 10) >= rangeStartDate).length;
-  const activeSectors = [...new Set(leads.filter(l => (l.activityLog || []).length > 0).map(l => l.sector))].length;
+  const activeSectors = [...new Set(leads.filter(l => l._stats).map(l => l.sector))].length;
 
   // ─── PIPELINE ────────────────────────────────────────────────────────────
   const stageCounts = STAGES.map(s => ({

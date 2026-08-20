@@ -219,14 +219,14 @@ export default function PWProposalKanban({ leads, onOrgClick }) {
   const uniqueOrgs = Object.values(orgMap);
 
   // Last touch point per org name — max activity date across ALL of that org's
-  // leads (any direction), from the activity log already attached to each lead.
+  // leads. Uses the per-lead `last_touch` aggregate attached at load (the full
+  // activity log is no longer fetched up front).
   const lastTouchByName = {};
   for (const lead of leads) {
-    for (const a of lead.activityLog || []) {
-      if (!a.date) continue;
-      if (!lastTouchByName[lead.name] || a.date > lastTouchByName[lead.name]) {
-        lastTouchByName[lead.name] = a.date;
-      }
+    const lt = lead.last_touch;
+    if (!lt) continue;
+    if (!lastTouchByName[lead.name] || lt > lastTouchByName[lead.name]) {
+      lastTouchByName[lead.name] = lt;
     }
   }
 

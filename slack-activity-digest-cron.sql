@@ -16,7 +16,7 @@ SELECT cron.schedule(
   format(
     $$
     SELECT net.http_post(
-      url     := 'https://puzfqevdphncajcjkvha.supabase.co/functions/v1/slack-activity-digest',
+      url     := 'https://ndjwczcswxfivmyynohk.supabase.co/functions/v1/slack-activity-digest',
       headers := '{"Content-Type": "application/json"}'::jsonb,
       body    := '{}'::jsonb
     );

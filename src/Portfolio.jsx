@@ -841,6 +841,8 @@ export default function Portfolio({ session, onOpenProject, onNewProject }) {
   const [inputData, setInputData] = useState({}) // projectId → { field_name: field_value }
   const [fmVersionDates, setFmVersionDates] = useState({}) // projectId → { fmVersion: date } (for acq progress / deal stage)
   const [overviewData, setOverviewData] = useState({}) // projectId → project_overview.data (Executive Summary)
+  const [portfolios, setPortfolios] = useState([])     // portfolios rows (id, name, seller, …)
+  const [openPortfolios, setOpenPortfolios] = useState({}) // portfolioId → expanded?
   const [loading, setLoading] = useState(true)
   const [menuOpen, setMenuOpen] = useState(null)
   const [viewMode, setViewMode] = useState('projects') // 'projects' | 'leads' | 'news' | 'comps'
@@ -852,6 +854,9 @@ export default function Portfolio({ session, onOpenProject, onNewProject }) {
   const [sortKey, setSortKey] = useState('stage')  // default: Stage, completed first
   const [sortDir, setSortDir] = useState('desc')
   const toggleSort = (k) => { if (sortKey === k) setSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setSortKey(k); setSortDir('asc'); } }
+  const [portfolioTarget, setPortfolioTarget] = useState(null) // project being (re)assigned to a portfolio
+  const [pfChoice, setPfChoice] = useState('')                 // '' = new, 'none' = remove, else portfolio id
+  const [pfNewName, setPfNewName] = useState('')
   const [cancelTarget, setCancelTarget] = useState(null) // project pending cancellation
   const [cancelReason, setCancelReason] = useState('')
   const [cancelNotes, setCancelNotes] = useState('')
@@ -861,10 +866,11 @@ export default function Portfolio({ session, onOpenProject, onNewProject }) {
 
   const fetchProjects = async () => {
     setLoading(true)
-    const { data: projectData } = await supabase
-      .from('projects')
-      .select('*')
-      .order('created_at', { ascending: false })
+    const [{ data: projectData }, { data: portfolioData }] = await Promise.all([
+      supabase.from('projects').select('*').order('created_at', { ascending: false }),
+      supabase.from('portfolios').select('*').order('name'),
+    ])
+    setPortfolios(portfolioData || [])
     if (projectData) {
       setProjects(projectData)
       // Fetch runs, acquisition data, inputs, and overview data for each project
@@ -958,6 +964,33 @@ export default function Portfolio({ session, onOpenProject, onNewProject }) {
     fetchProjects()
   }
 
+  // Assign / reassign / remove a project's portfolio. Membership is just a
+  // grouping — nothing about the project's own DD or model changes.
+  const handleAssignPortfolio = async () => {
+    if (!portfolioTarget) return
+    let pfId = null
+    if (pfChoice === 'none') {
+      pfId = null
+    } else if (pfChoice) {
+      pfId = pfChoice
+    } else {
+      const wanted = pfNewName.trim()
+      if (!wanted) return
+      const existing = portfolios.find(p => p.name.toLowerCase() === wanted.toLowerCase())
+      if (existing) pfId = existing.id
+      else {
+        const { data, error } = await supabase.from('portfolios')
+          .insert({ name: wanted, created_by: session?.user?.id || null }).select().single()
+        if (error) { console.error('Error creating portfolio:', error); return }
+        pfId = data.id
+      }
+    }
+    const { error } = await supabase.from('projects').update({ portfolio_id: pfId }).eq('id', portfolioTarget.id)
+    if (error) { console.error('Error assigning portfolio:', error); return }
+    setPortfolioTarget(null); setPfChoice(''); setPfNewName('')
+    fetchProjects()
+  }
+
   const handleRestore = async (projectId) => {
     const { error } = await supabase.from('projects')
       .update({ cancelled: false, cancel_reason: null, cancel_notes: null, cancelled_at: null })
@@ -986,8 +1019,20 @@ export default function Portfolio({ session, onOpenProject, onNewProject }) {
     const cap = r?.total_capex || 0
     return s + cap * (1 - ((p.gearing || 70) / 100))
   }, 0)
-  const irrs          = filtered.map(p => getLatestRun(p)?.project_irr).filter(Boolean)
-  const blendedIRR    = irrs.length ? irrs.reduce((a, b) => a + b, 0) / irrs.length : null
+  // MWp-weighted so a 71 MWp site counts for more than a 12 MWp one. Falls back
+  // to a simple mean only when no project with an IRR has a capacity.
+  const weightedIRR = (projs) => {
+    const withIrr = projs.filter(p => getLatestRun(p)?.project_irr != null)
+    if (!withIrr.length) return null
+    let num = 0, den = 0
+    for (const p of withIrr) {
+      const mw = projectMwp(p)
+      if (mw != null && mw > 0) { num += getLatestRun(p).project_irr * mw; den += mw }
+    }
+    if (den > 0) return num / den
+    return withIrr.reduce((s, p) => s + getLatestRun(p).project_irr, 0) / withIrr.length
+  }
+  const blendedIRR    = weightedIRR(filtered)
   const equityIrrs    = filtered.map(p => getLatestRun(p)?.equity_irr).filter(v => v != null && v > -50 && v < 100)
   const blendedEquityIRR = equityIrrs.length ? equityIrrs.reduce((a, b) => a + b, 0) / equityIrrs.length : null
   const statusCounts  = STATUSES.reduce((acc, s) => ({ ...acc, [s]: filtered.filter(p => p.status === s).length }), {})
@@ -1013,6 +1058,70 @@ export default function Portfolio({ session, onOpenProject, onNewProject }) {
   const groups = showCancelled && cancelledProjects.length > 0
     ? [...byStatus, { status: 'Cancelled', projects: cancelledProjects, color: '#9CA3AF' }]
     : byStatus
+
+  // ── Portfolio rollups ─────────────────────────────────────────────────────
+  // Projects in a portfolio are DD'd and modelled independently; the portfolio
+  // row is a read-only rollup that collapses them into a single line.
+  const stageRank = (p) => DEAL_STAGES_ORDERED.indexOf(getDealStage(acqData[p.id], fmVersionDates[p.id]))
+  const acqPctOf  = (p) => getAcqProgress(acqData[p.id], fmVersionDates[p.id])
+
+  // "Most advanced" = furthest deal stage, ties broken on acquisition progress.
+  const mostAdvanced = (projs) => projs.reduce((best, p) => {
+    if (!best) return p
+    const d = stageRank(p) - stageRank(best)
+    if (d !== 0) return d > 0 ? p : best
+    return (acqPctOf(p) ?? -1) > (acqPctOf(best) ?? -1) ? p : best
+  }, null)
+
+  const portfolioAgg = (projs) => {
+    const lead = mostAdvanced(projs)
+    const sum = (fn) => {
+      let s = 0, any = false
+      for (const p of projs) { const v = fn(p); if (v != null) { s += v; any = true } }
+      return any ? s : null
+    }
+    const uniq = (fn) => { const s = new Set(projs.map(fn).filter(Boolean)); return s.size === 1 ? [...s][0] : null }
+    const totalGridCost = sum(gridCostOf)
+    const totalExport   = sum(exportOf)
+    const cods = projs.map(p => p.cod).filter(Boolean).sort()
+    return {
+      lead,
+      dealStage: lead ? getDealStage(acqData[lead.id], fmVersionDates[lead.id]) : null,
+      acqPct:    lead ? acqPctOf(lead) : null,
+      mwp:       sum(projectMwp),
+      irr:       weightedIRR(projs),
+      capex:     sum(p => getLatestRun(p)?.total_capex || null),
+      // True weighted average: total grid cost ÷ total export, not a mean of ratios.
+      gridPerMW: (totalGridCost && totalExport) ? totalGridCost / totalExport : null,
+      technology: uniq(p => p.technology),
+      geography:  uniq(p => p.geography),
+      cod:        cods.length ? cods[cods.length - 1] : null, // fully energised when the last one lands
+    }
+  }
+
+  // Build the row list for a status group: standalone projects stay as rows,
+  // portfolio members collapse into one portfolio row placed at the status of
+  // their most advanced project (so a portfolio is never listed twice).
+  const buildItems = (groupProjects, allGroupSource) => {
+    const items = []
+    const seen = new Set()
+    for (const p of groupProjects) {
+      if (!p.portfolio_id) { items.push({ type: 'project', key: p.id, p }); continue }
+      if (seen.has(p.portfolio_id)) continue
+      seen.add(p.portfolio_id)
+      const members = allGroupSource.filter(x => x.portfolio_id === p.portfolio_id)
+      const home = mostAdvanced(members)
+      // Only render the portfolio in its lead project's status group.
+      if (home && home.status !== p.status) continue
+      const pf = portfolios.find(x => x.id === p.portfolio_id)
+      items.push({
+        type: 'portfolio', key: p.portfolio_id,
+        pf: pf || { id: p.portfolio_id, name: 'Portfolio' },
+        projects: members, agg: portfolioAgg(members),
+      })
+    }
+    return items
+  }
 
   // Sort rows within each status group by the active column. Missing values sink.
   const sortProjects = (projs) => {
@@ -1040,6 +1149,236 @@ export default function Portfolio({ session, onOpenProject, onNewProject }) {
     })
   }
   const SORTABLE = { Stage: 'stage', MWp: 'mwp', COD: 'cod' }
+
+  // ── Row renderers ─────────────────────────────────────────────────────────
+  // `nested` rows are the projects revealed under an expanded portfolio: same
+  // row, indented and hairline-linked so the grouping reads at a glance.
+  const renderProjectRow = (p, nested) => {
+                  const run = getLatestRun(p)
+                  const irrVal = run?.project_irr
+                  const irrColor = !irrVal ? theme.textMuted : irrVal < 0 ? '#ef4444' : irrVal < 7.5 ? theme.warning : theme.success
+                  const isMenuOpen = menuOpen === p.id
+                  const dealStage = getDealStage(acqData[p.id], fmVersionDates[p.id])
+                  const acqPct = getAcqProgress(acqData[p.id], fmVersionDates[p.id])
+                  const inputs = inputData[p.id] || {}
+                  const gridCostMWe = gridPerMW(p)
+                  const stageColor = DEAL_STAGE_COLORS[dealStage] || theme.textMuted
+                  const techColor = TECH_COLORS[p.technology] || theme.textMuted
+                  return (
+                    <div key={p.id}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = theme.accent; e.currentTarget.style.background = theme.hoverBg; }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = theme.cardBorder; e.currentTarget.style.background = theme.cardBg; }}
+                      style={{ display: 'grid', gridTemplateColumns: '2.5fr 1fr 1fr 2fr 1fr 1fr 1fr 1fr 1fr 1fr 0.6fr 0.5fr', gap: 6, padding: '14px 16px', background: theme.cardBg, border: `1px solid ${theme.cardBorder}`, borderRadius: 10, marginBottom: 6, alignItems: 'center', transition: 'border-color 0.15s, background 0.15s', position: 'relative', cursor: 'pointer', ...(nested ? { marginLeft: 26, borderLeft: `2px solid ${theme.cardBorder}` } : null) }}
+                    >
+                      {/* Name + COD */}
+                      <div onClick={() => onOpenProject(p)} style={{ cursor: 'pointer' }}>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: theme.textPrimary, marginBottom: 2 }}>{p.name}</div>
+                        <span style={{ fontSize: 10, color: theme.textTertiary }}>{p.team_name || '—'}</span>
+                      </div>
+                      {/* Tech */}
+                      <div onClick={() => onOpenProject(p)} style={{ cursor: 'pointer' }}>
+                        <span style={{ fontSize: 9, fontWeight: 700, color: techColor, background: `${techColor}18`, border: `1px solid ${techColor}33`, borderRadius: 4, padding: '2px 6px' }}>{p.technology}</span>
+                      </div>
+                      {/* Deal Stage */}
+                      <div onClick={() => onOpenProject(p)} style={{ cursor: 'pointer' }}>
+                        {dealStage ? (
+                          <span style={{ fontSize: 9, fontWeight: 700, color: stageColor, background: `${stageColor}18`, border: `1px solid ${stageColor}33`, borderRadius: 4, padding: '2px 6px', whiteSpace: 'nowrap' }}>{dealStage}</span>
+                        ) : <span style={{ fontSize: 11, color: theme.textMuted }}>—</span>}
+                      </div>
+                      {/* Acquisition Progress % */}
+                      <div onClick={() => onOpenProject(p)} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        {acqPct != null ? (
+                          <>
+                            <div style={{ flex: 1, height: 5, background: theme.pillBg, borderRadius: 3, overflow: 'hidden' }}>
+                              <div style={{ width: `${acqPct}%`, height: '100%', background: acqPct >= 80 ? theme.success : acqPct >= 40 ? theme.warning : theme.textMuted, borderRadius: 3, transition: 'width 0.3s' }} />
+                            </div>
+                            <span style={{ fontSize: 11, fontWeight: 600, color: theme.textSecondary, fontFamily: 'monospace', minWidth: 28 }}>{acqPct}%</span>
+                          </>
+                        ) : <span style={{ fontSize: 11, color: theme.textMuted }}>—</span>}
+                      </div>
+                      {/* Geography */}
+                      <div onClick={() => onOpenProject(p)} style={{ cursor: 'pointer', fontSize: 12, color: '#8A9AAA' }}>{p.geography}</div>
+                      {/* MWp */}
+                      <div onClick={() => onOpenProject(p)} style={{ cursor: 'pointer', fontSize: 13, color: theme.textPrimary, fontFamily: 'monospace' }}>{projectMwp(p) != null ? fmt(projectMwp(p), 1) : '—'}</div>
+                      {/* Project IRR */}
+                      <div onClick={() => onOpenProject(p)} style={{ cursor: 'pointer', fontSize: 14, fontWeight: 700, color: irrColor, fontFamily: 'monospace' }}>
+                        {irrVal != null ? `${fmt(irrVal)}%` : '—'}
+                      </div>
+                      {/* CapEx */}
+                      <div onClick={() => onOpenProject(p)} style={{ cursor: 'pointer', fontSize: 13, color: theme.textPrimary, fontFamily: 'monospace' }}>
+                        {run?.total_capex ? fmtM(run.total_capex) : '—'}
+                      </div>
+                      {/* Grid Cost £/MWe */}
+                      <div onClick={() => onOpenProject(p)} style={{ cursor: 'pointer', fontSize: 13, color: theme.textPrimary, fontFamily: 'monospace' }}>
+                        {gridCostMWe ? fmtK(gridCostMWe) : '—'}
+                      </div>
+                      {/* COD */}
+                      <div onClick={() => onOpenProject(p)} style={{ cursor: 'pointer', fontSize: 13, color: theme.textPrimary, fontFamily: 'monospace' }}>
+                        {p.cod ? new Date(p.cod).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }) : '—'}
+                      </div>
+                      {/* Open link */}
+                      <div onClick={() => onOpenProject(p)} style={{ cursor: 'pointer', fontSize: 11, color: theme.accent, textAlign: 'center' }}>Open →</div>
+                      {/* Three-dot menu */}
+                      <div style={{ position: 'relative' }}>
+                        <button
+                          onClick={e => { e.stopPropagation(); setMenuOpen(isMenuOpen ? null : p.id) }}
+                          style={{ width: 28, height: 28, borderRadius: 6, background: isMenuOpen ? theme.border : 'transparent', border: '1px solid transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: theme.textTertiary, fontSize: 16, lineHeight: 1 }}
+                          onMouseEnter={e => e.currentTarget.style.background = theme.border}
+                          onMouseLeave={e => { if (!isMenuOpen) e.currentTarget.style.background = 'transparent' }}
+                        >⋯</button>
+                        {isMenuOpen && (
+                          <div
+                            style={{ position: 'absolute', right: 0, top: 32, width: 160, background: theme.pillBg, border: `1px solid ${theme.cardBorder}`, borderRadius: 8, zIndex: 100, boxShadow: '0 8px 24px rgba(0,0,0,0.5)', overflow: 'hidden' }}
+                            onClick={e => e.stopPropagation()}
+                          >
+                            <div
+                              onClick={() => { onOpenProject(p); setMenuOpen(null) }}
+                              style={{ padding: '10px 14px', fontSize: 12, color: theme.textSecondary, cursor: 'pointer', borderBottom: `1px solid ${theme.cardBorder}` }}
+                              onMouseEnter={e => e.currentTarget.style.background = theme.border}
+                              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                            >Open model</div>
+                            <div
+                              onClick={() => { setPortfolioTarget(p); setPfChoice(p.portfolio_id || ''); setPfNewName(''); setMenuOpen(null) }}
+                              style={{ padding: '10px 14px', fontSize: 12, color: theme.textSecondary, cursor: 'pointer', borderBottom: `1px solid ${theme.cardBorder}` }}
+                              onMouseEnter={e => e.currentTarget.style.background = theme.border}
+                              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                            >{p.portfolio_id ? 'Change portfolio' : 'Add to portfolio'}</div>
+                            {p.cancelled ? (
+                              <div
+                                onClick={() => handleRestore(p.id)}
+                                style={{ padding: '10px 14px', fontSize: 12, color: theme.accent, cursor: 'pointer', borderBottom: `1px solid ${theme.cardBorder}` }}
+                                onMouseEnter={e => e.currentTarget.style.background = theme.border}
+                                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                              >Restore project</div>
+                            ) : (
+                              <div
+                                onClick={() => { setCancelTarget(p); setCancelReason(''); setCancelNotes(''); setMenuOpen(null) }}
+                                style={{ padding: '10px 14px', fontSize: 12, color: '#d97706', cursor: 'pointer', borderBottom: `1px solid ${theme.cardBorder}` }}
+                                onMouseEnter={e => e.currentTarget.style.background = theme.border}
+                                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                              >Cancel acquisition</div>
+                            )}
+                            <div
+                              onClick={() => handleDelete(p.id)}
+                              style={{ padding: '10px 14px', fontSize: 12, color: '#ef4444', cursor: 'pointer' }}
+                              onMouseEnter={e => e.currentTarget.style.background = theme.border}
+                              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                            >Delete project</div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )
+  }
+
+
+  // Collapsed portfolio row: one line summarising the whole deal, expanding to
+  // reveal the member projects (each of which is DD'd and modelled on its own).
+  const renderPortfolioRow = ({ pf, projects: members, agg, key }) => {
+    const isOpen = !!openPortfolios[key]
+    const stageColor = DEAL_STAGE_COLORS[agg.dealStage] || theme.textMuted
+    const techColor = TECH_COLORS[agg.technology] || theme.textMuted
+    const irrColor = agg.irr == null ? theme.textMuted : agg.irr < 0 ? '#ef4444' : agg.irr < 7.5 ? theme.warning : theme.success
+    const cell = { fontSize: 13, color: theme.textPrimary, fontFamily: 'monospace' }
+    return (
+      <div key={key}>
+        <div
+          onClick={() => setOpenPortfolios(o => ({ ...o, [key]: !isOpen }))}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = theme.accent }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = theme.accent + '55' }}
+          style={{
+            display: 'grid', gridTemplateColumns: '2.5fr 1fr 1fr 2fr 1fr 1fr 1fr 1fr 1fr 1fr 0.6fr 0.5fr', gap: 6,
+            padding: '14px 16px', background: theme.pillBg, border: `1px solid ${theme.accent}55`,
+            borderRadius: 10, marginBottom: 6, alignItems: 'center', cursor: 'pointer',
+            transition: 'border-color 0.15s',
+          }}
+        >
+          {/* Name + member count */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{
+              display: 'inline-block', fontSize: 9, color: theme.textTertiary,
+              transform: isOpen ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.2s',
+            }}>▼</span>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: theme.textPrimary, marginBottom: 2, display: 'flex', alignItems: 'center', gap: 7 }}>
+                {pf.name}
+                <span style={{ fontSize: 8, fontWeight: 800, color: theme.accent, background: `${theme.accent}18`, border: `1px solid ${theme.accent}44`, borderRadius: 4, padding: '2px 5px', letterSpacing: '0.06em' }}>PORTFOLIO</span>
+              </div>
+              <span style={{ fontSize: 10, color: theme.textTertiary }}>
+                {members.length} projects{pf.seller ? ` · ${pf.seller}` : ''}
+              </span>
+            </div>
+          </div>
+          {/* Tech */}
+          <div>
+            {agg.technology
+              ? <span style={{ fontSize: 9, fontWeight: 700, color: techColor, background: `${techColor}18`, border: `1px solid ${techColor}33`, borderRadius: 4, padding: '2px 6px' }}>{agg.technology}</span>
+              : <span style={{ fontSize: 11, color: theme.textMuted }}>Mixed</span>}
+          </div>
+          {/* Most advanced stage */}
+          <div>
+            {agg.dealStage
+              ? <span style={{ fontSize: 9, fontWeight: 700, color: stageColor, background: `${stageColor}18`, border: `1px solid ${stageColor}33`, borderRadius: 4, padding: '2px 6px', whiteSpace: 'nowrap' }}>{agg.dealStage}</span>
+              : <span style={{ fontSize: 11, color: theme.textMuted }}>—</span>}
+          </div>
+          {/* ACQ % of the most advanced project */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {agg.acqPct != null ? (
+              <>
+                <div style={{ flex: 1, height: 5, background: theme.border, borderRadius: 3, overflow: 'hidden' }}>
+                  <div style={{ width: `${agg.acqPct}%`, height: '100%', background: agg.acqPct >= 80 ? theme.success : agg.acqPct >= 40 ? theme.warning : theme.textMuted, borderRadius: 3 }} />
+                </div>
+                <span style={{ fontSize: 11, fontWeight: 600, color: theme.textSecondary, fontFamily: 'monospace', minWidth: 28 }}>{agg.acqPct}%</span>
+              </>
+            ) : <span style={{ fontSize: 11, color: theme.textMuted }}>—</span>}
+          </div>
+          {/* Geography */}
+          <div style={{ fontSize: 12, color: '#8A9AAA' }}>{agg.geography || 'Mixed'}</div>
+          {/* Total MWp */}
+          <div style={{ ...cell, fontWeight: 700 }}>{agg.mwp != null ? fmt(agg.mwp, 1) : '—'}</div>
+          {/* MWp-weighted IRR */}
+          <div style={{ ...cell, fontSize: 14, fontWeight: 700, color: irrColor }}>{agg.irr != null ? `${fmt(agg.irr)}%` : '—'}</div>
+          {/* Total capex */}
+          <div style={{ ...cell, fontWeight: 700 }}>{agg.capex ? fmtM(agg.capex) : '—'}</div>
+          {/* Weighted-average grid £/MWe */}
+          <div style={cell}>{agg.gridPerMW ? fmtK(agg.gridPerMW) : '—'}</div>
+          {/* Latest COD across the portfolio */}
+          <div style={cell}>{agg.cod ? new Date(agg.cod).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }) : '—'}</div>
+          <div style={{ fontSize: 11, color: theme.textTertiary, textAlign: 'center' }}>{isOpen ? 'Hide' : 'Show'}</div>
+          <div />
+        </div>
+        {isOpen && sortProjects(members).map(p => renderProjectRow(p, true))}
+      </div>
+    )
+  }
+
+  // Sort the mixed project / portfolio row list. A portfolio sorts on its
+  // rollup values, so it sits where its combined size and stage put it.
+  const sortItems = (items) => {
+    if (!sortKey) return items
+    const val = (it) => {
+      if (it.type === 'portfolio') {
+        return sortKey === 'mwp' ? it.agg.mwp
+          : sortKey === 'cod' ? it.agg.cod
+          : DEAL_STAGES_ORDERED.indexOf(it.agg.dealStage)
+      }
+      return sortKey === 'mwp' ? projectMwp(it.p)
+        : sortKey === 'cod' ? it.p.cod
+        : stageRank(it.p)
+    }
+    const tie = (it) => it.type === 'portfolio' ? (it.agg.acqPct ?? -1) : (acqPctOf(it.p) ?? -1)
+    const missing = (it) => { const v = val(it); return v == null || v === '' || (sortKey === 'stage' && v < 0) }
+    return [...items].sort((a, b) => {
+      const am = missing(a), bm = missing(b)
+      if (am && bm) return 0
+      if (am) return 1
+      if (bm) return -1
+      const av = val(a), bv = val(b)
+      let cmp = typeof av === 'string' ? av.localeCompare(bv) : (av - bv)
+      if (sortKey === 'stage' && cmp === 0) cmp = tie(a) - tie(b)
+      return sortDir === 'asc' ? cmp : -cmp
+    })
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: theme.pageBg, fontFamily: "'Inter', system-ui, sans-serif", color: '#2C3B4D', overflow: 'hidden' }}>
@@ -1172,117 +1511,10 @@ export default function Portfolio({ session, onOpenProject, onNewProject }) {
                   })}
                 </div>
 
-                {/* Project rows */}
-                {sortProjects(group.projects).map(p => {
-                  const run = getLatestRun(p)
-                  const irrVal = run?.project_irr
-                  const irrColor = !irrVal ? theme.textMuted : irrVal < 0 ? '#ef4444' : irrVal < 7.5 ? theme.warning : theme.success
-                  const isMenuOpen = menuOpen === p.id
-                  const dealStage = getDealStage(acqData[p.id], fmVersionDates[p.id])
-                  const acqPct = getAcqProgress(acqData[p.id], fmVersionDates[p.id])
-                  const inputs = inputData[p.id] || {}
-                  const gridCostMWe = gridPerMW(p)
-                  const stageColor = DEAL_STAGE_COLORS[dealStage] || theme.textMuted
-                  const techColor = TECH_COLORS[p.technology] || theme.textMuted
-                  return (
-                    <div key={p.id}
-                      onMouseEnter={e => { e.currentTarget.style.borderColor = theme.accent; e.currentTarget.style.background = theme.hoverBg; }}
-                      onMouseLeave={e => { e.currentTarget.style.borderColor = theme.cardBorder; e.currentTarget.style.background = theme.cardBg; }}
-                      style={{ display: 'grid', gridTemplateColumns: '2.5fr 1fr 1fr 2fr 1fr 1fr 1fr 1fr 1fr 1fr 0.6fr 0.5fr', gap: 6, padding: '14px 16px', background: theme.cardBg, border: `1px solid ${theme.cardBorder}`, borderRadius: 10, marginBottom: 6, alignItems: 'center', transition: 'border-color 0.15s, background 0.15s', position: 'relative', cursor: 'pointer' }}
-                    >
-                      {/* Name + COD */}
-                      <div onClick={() => onOpenProject(p)} style={{ cursor: 'pointer' }}>
-                        <div style={{ fontSize: 14, fontWeight: 600, color: theme.textPrimary, marginBottom: 2 }}>{p.name}</div>
-                        <span style={{ fontSize: 10, color: theme.textTertiary }}>{p.team_name || '—'}</span>
-                      </div>
-                      {/* Tech */}
-                      <div onClick={() => onOpenProject(p)} style={{ cursor: 'pointer' }}>
-                        <span style={{ fontSize: 9, fontWeight: 700, color: techColor, background: `${techColor}18`, border: `1px solid ${techColor}33`, borderRadius: 4, padding: '2px 6px' }}>{p.technology}</span>
-                      </div>
-                      {/* Deal Stage */}
-                      <div onClick={() => onOpenProject(p)} style={{ cursor: 'pointer' }}>
-                        {dealStage ? (
-                          <span style={{ fontSize: 9, fontWeight: 700, color: stageColor, background: `${stageColor}18`, border: `1px solid ${stageColor}33`, borderRadius: 4, padding: '2px 6px', whiteSpace: 'nowrap' }}>{dealStage}</span>
-                        ) : <span style={{ fontSize: 11, color: theme.textMuted }}>—</span>}
-                      </div>
-                      {/* Acquisition Progress % */}
-                      <div onClick={() => onOpenProject(p)} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
-                        {acqPct != null ? (
-                          <>
-                            <div style={{ flex: 1, height: 5, background: theme.pillBg, borderRadius: 3, overflow: 'hidden' }}>
-                              <div style={{ width: `${acqPct}%`, height: '100%', background: acqPct >= 80 ? theme.success : acqPct >= 40 ? theme.warning : theme.textMuted, borderRadius: 3, transition: 'width 0.3s' }} />
-                            </div>
-                            <span style={{ fontSize: 11, fontWeight: 600, color: theme.textSecondary, fontFamily: 'monospace', minWidth: 28 }}>{acqPct}%</span>
-                          </>
-                        ) : <span style={{ fontSize: 11, color: theme.textMuted }}>—</span>}
-                      </div>
-                      {/* Geography */}
-                      <div onClick={() => onOpenProject(p)} style={{ cursor: 'pointer', fontSize: 12, color: '#8A9AAA' }}>{p.geography}</div>
-                      {/* MWp */}
-                      <div onClick={() => onOpenProject(p)} style={{ cursor: 'pointer', fontSize: 13, color: theme.textPrimary, fontFamily: 'monospace' }}>{projectMwp(p) != null ? fmt(projectMwp(p), 1) : '—'}</div>
-                      {/* Project IRR */}
-                      <div onClick={() => onOpenProject(p)} style={{ cursor: 'pointer', fontSize: 14, fontWeight: 700, color: irrColor, fontFamily: 'monospace' }}>
-                        {irrVal != null ? `${fmt(irrVal)}%` : '—'}
-                      </div>
-                      {/* CapEx */}
-                      <div onClick={() => onOpenProject(p)} style={{ cursor: 'pointer', fontSize: 13, color: theme.textPrimary, fontFamily: 'monospace' }}>
-                        {run?.total_capex ? fmtM(run.total_capex) : '—'}
-                      </div>
-                      {/* Grid Cost £/MWe */}
-                      <div onClick={() => onOpenProject(p)} style={{ cursor: 'pointer', fontSize: 13, color: theme.textPrimary, fontFamily: 'monospace' }}>
-                        {gridCostMWe ? fmtK(gridCostMWe) : '—'}
-                      </div>
-                      {/* COD */}
-                      <div onClick={() => onOpenProject(p)} style={{ cursor: 'pointer', fontSize: 13, color: theme.textPrimary, fontFamily: 'monospace' }}>
-                        {p.cod ? new Date(p.cod).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }) : '—'}
-                      </div>
-                      {/* Open link */}
-                      <div onClick={() => onOpenProject(p)} style={{ cursor: 'pointer', fontSize: 11, color: theme.accent, textAlign: 'center' }}>Open →</div>
-                      {/* Three-dot menu */}
-                      <div style={{ position: 'relative' }}>
-                        <button
-                          onClick={e => { e.stopPropagation(); setMenuOpen(isMenuOpen ? null : p.id) }}
-                          style={{ width: 28, height: 28, borderRadius: 6, background: isMenuOpen ? theme.border : 'transparent', border: '1px solid transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: theme.textTertiary, fontSize: 16, lineHeight: 1 }}
-                          onMouseEnter={e => e.currentTarget.style.background = theme.border}
-                          onMouseLeave={e => { if (!isMenuOpen) e.currentTarget.style.background = 'transparent' }}
-                        >⋯</button>
-                        {isMenuOpen && (
-                          <div
-                            style={{ position: 'absolute', right: 0, top: 32, width: 160, background: theme.pillBg, border: `1px solid ${theme.cardBorder}`, borderRadius: 8, zIndex: 100, boxShadow: '0 8px 24px rgba(0,0,0,0.5)', overflow: 'hidden' }}
-                            onClick={e => e.stopPropagation()}
-                          >
-                            <div
-                              onClick={() => { onOpenProject(p); setMenuOpen(null) }}
-                              style={{ padding: '10px 14px', fontSize: 12, color: theme.textSecondary, cursor: 'pointer', borderBottom: `1px solid ${theme.cardBorder}` }}
-                              onMouseEnter={e => e.currentTarget.style.background = theme.border}
-                              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                            >Open model</div>
-                            {p.cancelled ? (
-                              <div
-                                onClick={() => handleRestore(p.id)}
-                                style={{ padding: '10px 14px', fontSize: 12, color: theme.accent, cursor: 'pointer', borderBottom: `1px solid ${theme.cardBorder}` }}
-                                onMouseEnter={e => e.currentTarget.style.background = theme.border}
-                                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                              >Restore project</div>
-                            ) : (
-                              <div
-                                onClick={() => { setCancelTarget(p); setCancelReason(''); setCancelNotes(''); setMenuOpen(null) }}
-                                style={{ padding: '10px 14px', fontSize: 12, color: '#d97706', cursor: 'pointer', borderBottom: `1px solid ${theme.cardBorder}` }}
-                                onMouseEnter={e => e.currentTarget.style.background = theme.border}
-                                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                              >Cancel acquisition</div>
-                            )}
-                            <div
-                              onClick={() => handleDelete(p.id)}
-                              style={{ padding: '10px 14px', fontSize: 12, color: '#ef4444', cursor: 'pointer' }}
-                              onMouseEnter={e => e.currentTarget.style.background = theme.border}
-                              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                            >Delete project</div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )
+                {/* Project rows — portfolio members collapse into a portfolio row */}
+                {sortItems(buildItems(group.projects, group.status === 'Cancelled' ? cancelledProjects : filtered)).map(item => {
+                  if (item.type === 'portfolio') return renderPortfolioRow(item)
+                  return renderProjectRow(item.p, false)
                 })}
               </div>
             ))
@@ -1292,6 +1524,39 @@ export default function Portfolio({ session, onOpenProject, onNewProject }) {
       )}
 
       {/* Cancel acquisition modal */}
+      {/* Assign project to a portfolio */}
+      {portfolioTarget && (
+        <div onClick={() => setPortfolioTarget(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 24 }}>
+          <div onClick={e => e.stopPropagation()} style={{ width: 420, maxWidth: '100%', background: theme.pageBg, border: `1px solid ${theme.cardBorder}`, borderRadius: 14, padding: 24, boxShadow: '0 16px 48px rgba(0,0,0,0.5)' }}>
+            <div style={{ fontSize: 16, fontWeight: 800, color: theme.textPrimary, marginBottom: 4 }}>Portfolio</div>
+            <div style={{ fontSize: 12, color: theme.textSecondary, marginBottom: 18 }}>
+              {portfolioTarget.name} keeps its own due diligence, process and financial model — this only groups it in the list.
+            </div>
+            <select
+              value={pfChoice}
+              onChange={e => setPfChoice(e.target.value)}
+              style={{ width: '100%', background: theme.inputBg || theme.pillBg, border: `1px solid ${theme.border}`, borderRadius: 8, color: theme.textPrimary, padding: '10px 12px', fontSize: 13, outline: 'none', boxSizing: 'border-box', cursor: 'pointer', fontFamily: 'inherit' }}
+            >
+              <option value="">+ New portfolio…</option>
+              {portfolios.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              <option value="none">No portfolio (standalone)</option>
+            </select>
+            {!pfChoice && (
+              <input
+                value={pfNewName}
+                onChange={e => setPfNewName(e.target.value)}
+                placeholder="Portfolio name, e.g. WSE"
+                style={{ width: '100%', marginTop: 8, background: theme.inputBg || theme.pillBg, border: `1px solid ${theme.border}`, borderRadius: 8, color: theme.textPrimary, padding: '10px 12px', fontSize: 13, outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }}
+              />
+            )}
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 20 }}>
+              <button onClick={() => setPortfolioTarget(null)} style={{ padding: '9px 16px', fontSize: 12, fontWeight: 600, color: theme.textSecondary, background: 'none', border: `1px solid ${theme.border}`, borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+              <button onClick={handleAssignPortfolio} disabled={!pfChoice && !pfNewName.trim()} style={{ padding: '9px 20px', fontSize: 12, fontWeight: 700, color: '#fff', background: theme.accent, border: 'none', borderRadius: 8, cursor: (!pfChoice && !pfNewName.trim()) ? 'not-allowed' : 'pointer', opacity: (!pfChoice && !pfNewName.trim()) ? 0.6 : 1, fontFamily: 'inherit' }}>Save</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {cancelTarget && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}
           onClick={() => setCancelTarget(null)}>

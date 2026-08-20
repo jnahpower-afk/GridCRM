@@ -548,6 +548,13 @@ export default function PrivateWireLeads({ onTaskBadgeChange, campaignScope = nu
   const [enrolments,  setEnrolments]  = useState([]);
   const [seqTasks,    setSeqTasks]    = useState([]);
   const [showSeqMgr,  setShowSeqMgr]  = useState(false);
+  // Tasks are no longer loaded on section mount (the pending set is ~50k rows).
+  // Instead: a cheap RPC drives the tab badge, per-lead tasks load on selection
+  // (for the detail "next step" chip), and the full queue loads lazily when the
+  // Tasks tab is first opened.
+  const [dueBadgeCount, setDueBadgeCount] = useState(0);
+  const [tasksLoaded,   setTasksLoaded]   = useState(false);
+  const [tasksLoading,  setTasksLoading]  = useState(false);
 
   // ── Gmail ────────────────────────────────────────────────────────────────────
   const [gmailSettings,  setGmailSettings]  = useState([]); // [{owner_name, gmail_email, calendar_link}]
@@ -614,31 +621,99 @@ export default function PrivateWireLeads({ onTaskBadgeChange, campaignScope = nu
     return dueLeads.size;
   }, [seqTasks, ownerByLead]);
 
+  // Badge = live count once the full task set is loaded (so completing a task
+  // decrements it), otherwise the cheap RPC count fetched on mount.
+  const badgeCount = tasksLoaded ? myDueLeadCount : dueBadgeCount;
+
   // ── Sync task count to sidebar badge ─────────────────────────────────────────
   useEffect(() => {
     if (!onTaskBadgeChange) return;
-    onTaskBadgeChange(myDueLeadCount);
-  }, [myDueLeadCount, onTaskBadgeChange]);
+    onTaskBadgeChange(badgeCount);
+  }, [badgeCount, onTaskBadgeChange]);
+
+  // Cheap due-lead count for the tab badge (avoids loading ~50k task rows).
+  useEffect(() => {
+    if (isDC) { setDueBadgeCount(0); return; }
+    let cancelled = false;
+    const cu = (typeof localStorage !== "undefined" && localStorage.getItem("gridcrm_current_user")) || "";
+    supabase.rpc("pw_my_due_lead_count", { p_owner: cu })
+      .then(({ data, error }) => { if (!cancelled && !error) setDueBadgeCount(data || 0); });
+    return () => { cancelled = true; };
+  }, [isDC]);
+
+  // Per-lead pending tasks load on selection — powers the detail pane's
+  // "next step due" chip without loading the whole task table.
+  useEffect(() => {
+    if (!selectedId || isDC) return;
+    let cancelled = false;
+    supabase.from("sequence_tasks").select("*").eq("lead_id", selectedId).eq("status", "pending").order("due_date")
+      .then(({ data }) => { if (!cancelled && data?.length) setSeqTasks(prev => mergeTasksById(prev, data)); });
+    return () => { cancelled = true; };
+  }, [selectedId, isDC]);
+
+  // Full activity log for the selected lead loads lazily (the section no longer
+  // fetches every lead's activity up front — only per-lead aggregates).
+  useEffect(() => {
+    if (!selectedId) return;
+    const lead = leads.find(l => l.id === selectedId);
+    if (!lead || lead._activityLoaded) return;
+    let cancelled = false;
+    supabase.from("private_wire_activity_log").select("*").eq("lead_id", selectedId).order("date", { ascending: false })
+      .then(({ data }) => {
+        if (cancelled) return;
+        setLeads(prev => prev.map(l => l.id === selectedId ? { ...l, activityLog: data || [], _activityLoaded: true } : l));
+      });
+    return () => { cancelled = true; };
+  }, [selectedId]);
+
+  // Full pending-task queue loads lazily the first time the Tasks tab is opened.
+  // NB: tasksLoading must NOT be a dependency — setting it true would re-run this
+  // effect, whose cleanup cancels the in-flight fetch and leaves it spinning.
+  useEffect(() => {
+    if (viewMode !== "tasks" || tasksLoaded || isDC) return;
+    let cancelled = false;
+    setTasksLoading(true);
+    fetchAllRows("sequence_tasks", t => supabase.from(t).select("*, private_wire_leads!inner(campaign)").eq("status", "pending").or("campaign.eq.PW,campaign.is.null", { referencedTable: "private_wire_leads" }).order("due_date").order("id"))
+      .then(rows => { if (!cancelled) { setSeqTasks(prev => mergeTasksById(prev, rows)); setTasksLoaded(true); } })
+      .catch(err => console.error("Tasks load failed:", err))
+      .finally(() => { if (!cancelled) setTasksLoading(false); });
+    return () => { cancelled = true; };
+  }, [viewMode, tasksLoaded, isDC]);
 
   // ── Paginated fetch: bypasses Supabase server-side 1000-row cap ────────────
   async function fetchAllRows(table, query) {
-    // Invariant: PAGE must be <= Supabase's PostgREST max_rows cap. If PAGE
-    // exceeds the cap, the first (capped) page looks partial and the loop exits
-    // early — silently truncating. The cap was raised to 5000 via
-    // `ALTER ROLE authenticator SET pgrst.db_max_rows = 5000`. The loop still
-    // pages through tables larger than 5000 (e.g. sequence_tasks); it just
-    // takes more than one round-trip.
-    const PAGE = 5000;
-    let all = [], from = 0;
-    while (true) {
-      const { data, error } = await query(table).range(from, from + PAGE - 1);
-      if (error) throw error;
-      all = all.concat(data || []);
-      if ((data || []).length < PAGE) break;
-      from += PAGE;
+    // PAGE must be <= PostgREST's max_rows cap (raised to 5000 via
+    // `ALTER ROLE authenticator SET pgrst.db_max_rows = 5000`); a larger PAGE
+    // would make the first capped page look partial and truncate the loop.
+    // Pages are fetched BATCH-at-a-time concurrently rather than one-at-a-time,
+    // so an N-page table costs ceil(N/BATCH) round-trip waves, not N. Any
+    // over-requested page past the end simply returns empty (harmless).
+    const PAGE = 5000, BATCH = 4;
+    let all = [], from = 0, done = false;
+    while (!done) {
+      const reqs = [];
+      for (let b = 0; b < BATCH; b++) {
+        const start = from + b * PAGE;
+        reqs.push(query(table).range(start, start + PAGE - 1));
+      }
+      const results = await Promise.all(reqs);
+      for (const { data, error } of results) {
+        if (error) throw error;
+        all = all.concat(data || []);
+        if ((data || []).length < PAGE) done = true;
+      }
+      from += BATCH * PAGE;
     }
     return all;
   }
+
+  // Merge task rows by id (per-lead lazy loads + the full Tasks-tab load can
+  // arrive in either order; keep the newest copy of each row).
+  const mergeTasksById = (a, b) => {
+    const m = new Map(a.map(x => [x.id, x]));
+    for (const x of b) m.set(x.id, x);
+    return [...m.values()];
+  };
 
   // ── Handle Gmail OAuth redirect back to app ─────────────────────────────────
   useEffect(() => {
@@ -673,7 +748,7 @@ export default function PrivateWireLeads({ onTaskBadgeChange, campaignScope = nu
         // LeadImport.jsx and only surfaced elsewhere. If you add a field to the
         // detail pane or edit form, add it here too or it will read as undefined.
         const leadQuery = t => {
-          let q = supabase.from(t).select(LEAD_COLS).order("created_at", { ascending: false });
+          let q = supabase.from(t).select(LEAD_COLS).order("created_at", { ascending: false }).order("id");
           if (campaignScope === "DC")      q = q.eq("campaign", "DC");
           else if (campaignScope === "PW") q = q.or("campaign.eq.PW,campaign.is.null");
           return q;
@@ -690,21 +765,25 @@ export default function PrivateWireLeads({ onTaskBadgeChange, campaignScope = nu
           return q;
         };
 
-        const [leadsData, activityData, profilesRes, contactsData,
+        const [leadsData, statsData, profilesRes, contactsData,
                seqData, stepsData, enrolData, tasksData, gmailRes] = await Promise.all([
           fetchAllRows("private_wire_leads", leadQuery),
-          fetchAllRows("private_wire_activity_log", t => scopeByCampaign(supabase.from(t).select("*, private_wire_leads!inner(campaign)").order("date", { ascending: false }))),
+          // Per-lead activity aggregates (last touch + outbound/response counts)
+          // replace the ~37k-row full-activity fetch that dominated load. Full
+          // activity for a lead loads lazily on selection (see effect below).
+          fetchAllRows("pw_lead_activity_stats", t => supabase.from(t).select("lead_id,last_date,total_out,today_out,out_7d,resp_today").order("lead_id")),
           supabase.from("profiles").select("*").order("full_name"),
-          fetchAllRows("private_wire_contacts",    t => scopeByCampaign(supabase.from(t).select("*, private_wire_leads!inner(campaign)").order("created_at"))),
+          fetchAllRows("private_wire_contacts",    t => scopeByCampaign(supabase.from(t).select("*, private_wire_leads!inner(campaign)").order("created_at").order("id"))),
           supabase.from("sequences").select("*").order("created_at"),
           supabase.from("sequence_steps").select("*").order("step_number"),
           // enrolData is discarded downstream (setEnrolments reads `.data`, undefined
           // for an array), so don't pay to fetch ~9k rows we never use.
           Promise.resolve([]),
-          // Tasks power the PW-only Tasks queue and the UI only ever reads pending
-          // ones. Skip entirely for DC; fetch only pending for PW (drops ~35k
-          // completed/skipped rows from the largest table in the load).
-          isDC ? Promise.resolve([]) : fetchAllRows("sequence_tasks", t => supabase.from(t).select("*, private_wire_leads!inner(campaign)").eq("status", "pending").or("campaign.eq.PW,campaign.is.null", { referencedTable: "private_wire_leads" }).order("due_date")),
+          // Tasks are NOT fetched on mount — the pending PW set is ~50k rows and
+          // dominated section load time. The tab badge comes from a count RPC,
+          // per-lead tasks load on selection, and the full queue loads lazily
+          // when the Tasks tab is opened (see effects below).
+          Promise.resolve([]),
           supabase.from("user_gmail_settings").select("owner_name, gmail_email, calendar_link"),
         ]);
         setSequences(seqData.data  || []);
@@ -713,33 +792,25 @@ export default function PrivateWireLeads({ onTaskBadgeChange, campaignScope = nu
         setSeqTasks(tasksData);
         if (!gmailRes.error) setGmailSettings(gmailRes.data || []);
 
-        const leadsRes    = { data: leadsData,    error: null };
-        const activityRes = { data: activityData, error: null };
-        const contactsRes = { data: contactsData, error: null };
+        const contacts = contactsData || [];
 
-        if (leadsRes.error) throw leadsRes.error;
-        if (activityRes.error) throw activityRes.error;
+        // Per-lead activity stats → map by lead_id. Presence in the map means the
+        // lead has ≥1 activity (drives the "industries reached" KPI).
+        const statsByLead = new Map();
+        for (const s of (statsData || [])) statsByLead.set(s.lead_id, s);
 
-        const activities = activityRes.data || [];
-        const contacts = contactsRes.data || [];
-
-        // Group by lead_id once (O(n)) rather than filtering per lead (O(leads×rows),
-        // which was ~200M ops on the full PW set). Insertion order is preserved, so
-        // each lead's activity stays date-desc and contacts stay created-order.
-        const actByLead = new Map();
-        for (const a of activities) {
-          const arr = actByLead.get(a.lead_id);
-          if (arr) arr.push(a); else actByLead.set(a.lead_id, [a]);
-        }
         const contactsByLead = new Map();
         for (const c of contacts) {
           const arr = contactsByLead.get(c.lead_id);
           if (arr) arr.push(c); else contactsByLead.set(c.lead_id, [c]);
         }
 
-        const processedLeads = (leadsRes.data || []).map(lead => ({
+        const processedLeads = (leadsData || []).map(lead => ({
           ...lead,
-          activityLog: actByLead.get(lead.id) || [],
+          _stats: statsByLead.get(lead.id) || null,
+          last_touch: statsByLead.get(lead.id)?.last_date || null,
+          activityLog: [],      // lazy-loaded on selection
+          _activityLoaded: false,
           contacts: contactsByLead.get(lead.id) || [],
         }));
 
@@ -948,20 +1019,19 @@ export default function PrivateWireLeads({ onTaskBadgeChange, campaignScope = nu
   const totalContacts = campaignScopedLeads.length;
   const totalOrgs = new Set(campaignScopedLeads.map(l => (l.name || "").trim()).filter(Boolean)).size;
   const activeLeads = new Set(campaignScopedLeads.filter(l => !["Won", "Lost"].includes(l.stage)).map(l => l.name)).size;
-  const industriesReached = [...new Set(campaignScopedLeads.filter(l => (l.activityLog || []).length > 0).map(l => l.sector))].length;
+  // Activity-derived KPIs read the per-lead aggregate (_stats) rather than the
+  // full activity log, which is no longer loaded up front.
+  const industriesReached = [...new Set(campaignScopedLeads.filter(l => l._stats).map(l => l.sector))].length;
   // Distinct parent organisations that have received at least one outreach touch.
   // Counts on lead.name so multiple contacts at the same org collapse to one.
   const organisationsContacted = new Set(
     campaignScopedLeads
-      .filter(l => l.name && (l.activityLog || []).some(a => a.direction !== "Inbound"))
+      .filter(l => l.name && (l._stats?.total_out || 0) > 0)
       .map(l => l.name.trim())
   ).size;
-  const outreachToday = campaignScopedLeads.reduce((s, l) =>
-    s + (l.activityLog || []).filter(a => a.date === todayDate && a.direction !== "Inbound").length, 0);
-  const outreach7d = campaignScopedLeads.reduce((s, l) =>
-    s + (l.activityLog || []).filter(a => a.date >= sevenDaysAgoDate && a.direction !== "Inbound").length, 0);
-  const responsesToday = campaignScopedLeads.reduce((s, l) =>
-    s + (l.activityLog || []).filter(a => a.date === todayDate && a.response).length, 0);
+  const outreachToday = campaignScopedLeads.reduce((s, l) => s + (l._stats?.today_out || 0), 0);
+  const outreach7d = campaignScopedLeads.reduce((s, l) => s + (l._stats?.out_7d || 0), 0);
+  const responsesToday = campaignScopedLeads.reduce((s, l) => s + (l._stats?.resp_today || 0), 0);
 
   // Pipeline stage counts for mini funnel
   const stageCounts = STAGES.map(s => ({ stage: s, count: new Set(campaignScopedLeads.filter(l => l.stage === s).map(l => l.name)).size }));
@@ -1011,7 +1081,10 @@ export default function PrivateWireLeads({ onTaskBadgeChange, campaignScope = nu
 
         setLeads(prev => [{
           ...data[0],
+          _stats: null,
+          last_touch: null,
           activityLog: [],
+          _activityLoaded: true,   // brand-new lead has no activity to lazy-load
           contacts: firstContact ? [firstContact] : [],
         }, ...prev]);
       }
@@ -1362,8 +1435,19 @@ export default function PrivateWireLeads({ onTaskBadgeChange, campaignScope = nu
               }
               await supabase.from("private_wire_leads").update({ last_contacted: todayDate }).eq("id", selected.id);
               if (data?.[0]) {
+                const isOut = data[0].direction !== "Inbound";
                 setLeads(prev => prev.map(l => {
-                  if (l.id === selected.id) return { ...l, ...leadUpdate, activityLog: [data[0], ...(l.activityLog || [])] };
+                  if (l.id === selected.id) {
+                    const ps = l._stats || { total_out: 0, today_out: 0, out_7d: 0, resp_today: 0 };
+                    const _stats = {
+                      last_date: todayDate,
+                      total_out: (ps.total_out || 0) + (isOut ? 1 : 0),
+                      today_out: (ps.today_out || 0) + (isOut ? 1 : 0),
+                      out_7d:    (ps.out_7d || 0)    + (isOut ? 1 : 0),
+                      resp_today:(ps.resp_today || 0)+ (data[0].response ? 1 : 0),
+                    };
+                    return { ...l, ...leadUpdate, _stats, last_touch: todayDate, activityLog: [data[0], ...(l.activityLog || [])] };
+                  }
                   if (l.name === selected.name && l.stage === "New" && leadUpdate.stage === "Contacted") return { ...l, stage: "Contacted" };
                   return l;
                 }));
@@ -1387,7 +1471,9 @@ export default function PrivateWireLeads({ onTaskBadgeChange, campaignScope = nu
 
           {/* Activity timeline */}
           <SectionHeader theme={theme}>Recent Activity</SectionHeader>
-          {(selected.activityLog || []).length === 0 ? (
+          {!selected._activityLoaded ? (
+            <div style={{ fontSize: 11, color: theme.textMuted, padding: "8px 0", fontStyle: "italic" }}>Loading activity…</div>
+          ) : (selected.activityLog || []).length === 0 ? (
             <div style={{ fontSize: 11, color: theme.textMuted, padding: "8px 0", fontStyle: "italic" }}>No activity logged yet</div>
           ) : (
             <div>
@@ -1536,7 +1622,7 @@ export default function PrivateWireLeads({ onTaskBadgeChange, campaignScope = nu
                     .filter(([key]) => !(key === "substations" && campaignScope !== "DC")) // Substations list is DC-only
                     .filter(([key]) => !(key === "projects" && campaignScope !== "DC")) // DC Projects is DC-only
                     .map(([key, label]) => {
-                    const pendingCount = key === "tasks" ? myDueLeadCount : 0;
+                    const pendingCount = key === "tasks" ? badgeCount : 0;
                     return (
                       <button key={key} onClick={() => { setViewMode(key); if (key === "leads") setView("list"); }}
                         style={{ fontSize: 11, fontWeight: viewMode === key ? 700 : 500, padding: "4px 12px", borderRadius: 6, cursor: "pointer", color: viewMode === key ? theme.pillActiveText : theme.pillInactiveText, background: viewMode === key ? theme.pillActiveBg : "transparent", border: viewMode === key ? `1px solid ${theme.pillBorder}` : "1px solid transparent", boxShadow: viewMode === key ? theme.shadowSm : "none", display: "flex", alignItems: "center", gap: 5 }}>
@@ -1680,7 +1766,13 @@ export default function PrivateWireLeads({ onTaskBadgeChange, campaignScope = nu
             )}
 
             {/* Tasks view */}
-            {viewMode === "tasks" && (
+            {viewMode === "tasks" && tasksLoading && !tasksLoaded && (
+              <div style={{ padding: "48px 0", textAlign: "center" }}>
+                <EnergyLoader />
+                <div style={{ fontSize: 12, color: theme.textMuted, marginTop: 12 }}>Loading tasks…</div>
+              </div>
+            )}
+            {viewMode === "tasks" && !(tasksLoading && !tasksLoaded) && (
               <TaskQueue
                 tasks={seqTasks}
                 leads={leads}
@@ -1874,10 +1966,10 @@ export default function PrivateWireLeads({ onTaskBadgeChange, campaignScope = nu
                           );
                           // A single contact/lead row (indented when shown under an org header).
                           const renderRow = (lead, indented) => {
-                            const log = lead.activityLog || [];
-                            const todayCount = log.filter(a => a.date === todayDate && a.direction !== "Inbound").length;
-                            const totalCount = log.filter(a => a.direction !== "Inbound").length;
-                            const lastDate = log.length > 0 ? log[0].date : (lead.last_contacted || "—");
+                            const st = lead._stats;
+                            const todayCount = st?.today_out || 0;
+                            const totalCount = st?.total_out || 0;
+                            const lastDate = st?.last_date || lead.last_contacted || "—";
                             return (
                               <tr key={lead.id} onClick={() => { setSelectedId(lead.id); setView("list"); }}
                                 style={{ borderBottom: `1px solid ${theme.borderSubtle}`, cursor: "pointer", background: selectedId === lead.id ? theme.hoverBg : "transparent", transition: "background 0.1s" }}>
@@ -1906,10 +1998,10 @@ export default function PrivateWireLeads({ onTaskBadgeChange, campaignScope = nu
                             const owners = [...new Set(rows.map(l => l.owner).filter(Boolean))];
                             let today = 0, total = 0, last = null, earliest = null;
                             for (const l of rows) {
-                              const log = l.activityLog || [];
-                              today += log.filter(a => a.date === todayDate && a.direction !== "Inbound").length;
-                              total += log.filter(a => a.direction !== "Inbound").length;
-                              const lt = log.length > 0 ? log[0].date : (l.last_contacted || null);
+                              const st = l._stats;
+                              today += st?.today_out || 0;
+                              total += st?.total_out || 0;
+                              const lt = st?.last_date || l.last_contacted || null;
                               if (lt && (!last || lt > last)) last = lt;
                               if (l.created_at && (!earliest || l.created_at < earliest)) earliest = l.created_at;
                             }

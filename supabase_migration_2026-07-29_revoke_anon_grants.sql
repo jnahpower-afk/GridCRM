@@ -1,5 +1,5 @@
 -- URGENT: close unauthenticated (anon) access to the Grid CRM database.
--- Verified 2026-07-28 against project puzfqevdphncajcjkvha.
+-- Verified 2026-07-28 against the original Supabase project before Grid CRM migration.
 --
 -- WHAT IS WRONG
 --   The `anon` role holds SELECT/INSERT/UPDATE/DELETE/TRUNCATE on all 42 public tables.
@@ -58,6 +58,6 @@ grant  update (owner_name, gmail_email, calendar_link, updated_at)
 commit;
 
 -- VERIFY AFTER APPLYING (should return zero rows / an error, not data):
---   curl -s "https://puzfqevdphncajcjkvha.supabase.co/rest/v1/user_gmail_settings?select=refresh_token" \
+--   curl -s "https://ndjwczcswxfivmyynohk.supabase.co/rest/v1/user_gmail_settings?select=refresh_token" \
 --     -H "apikey: <anon key>"
---   curl -s "https://puzfqevdphncajcjkvha.supabase.co/rest/v1/leads?select=id" -H "apikey: <anon key>"
+--   curl -s "https://ndjwczcswxfivmyynohk.supabase.co/rest/v1/leads?select=id" -H "apikey: <anon key>"

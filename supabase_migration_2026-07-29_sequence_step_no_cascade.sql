@@ -1,5 +1,5 @@
 -- Stop a sequence-template edit from destroying outreach history.
--- Applied 2026-07-29 against project puzfqevdphncajcjkvha.
+-- Applied 2026-07-29 against the original Supabase project before Grid CRM migration.
 --
 -- THE BUG
 --   SequenceManager.jsx:76 deleted every step of a sequence on save and re-inserted them.
